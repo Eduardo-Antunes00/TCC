@@ -8,12 +8,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.tcc.viewmodels.UsuarioViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun LoginScreen(navController: NavController, usuarioViewModel: UsuarioViewModel) {
     var email by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
     var mensagem by remember { mutableStateOf("") }
+    var carregando by remember { mutableStateOf(false) }
+
+    val auth = FirebaseAuth.getInstance()
 
     Column(
         modifier = Modifier
@@ -26,23 +30,48 @@ fun LoginScreen(navController: NavController, usuarioViewModel: UsuarioViewModel
 
         Spacer(Modifier.height(16.dp))
 
-        TextField(value = email, onValueChange = { email = it }, label = { Text("E-mail") })
+        TextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("E-mail") },
+            singleLine = true
+        )
+
         Spacer(Modifier.height(8.dp))
-        TextField(value = senha, onValueChange = { senha = it }, label = { Text("Senha") })
+
+        TextField(
+            value = senha,
+            onValueChange = { senha = it },
+            label = { Text("Senha") },
+            singleLine = true
+        )
 
         Spacer(Modifier.height(16.dp))
 
-        Button(onClick = {
-            usuarioViewModel.buscarPorEmail(email) { user ->
-                if (user != null && user.senha == senha) {
-                    mensagem = "Login realizado com sucesso, Bem vindo ${user.nome}!"
-
-                    // Fazer navegar para tela inicial
+        Button(
+            onClick = {
+                if (email.isNotBlank() && senha.isNotBlank()) {
+                    carregando = true
+                    mensagem = ""
+                    auth.signInWithEmailAndPassword(email, senha)
+                        .addOnCompleteListener { task ->
+                            carregando = false
+                            if (task.isSuccessful) {
+                                val user = auth.currentUser
+                                mensagem = "Bem-vindo, ${user?.email ?: "usuário"}!"
+                                // 🔹 Exemplo: navegar para a tela inicial
+//                                navController.navigate("home") {
+//                                    popUpTo("login") { inclusive = true }
+//                                }
+                            } else {
+                                mensagem = "Usuário ou senha incorretos."
+                            }
+                        }
                 } else {
-                    mensagem = "Usuário ou senha incorretos."
+                    mensagem = "Preencha todos os campos."
                 }
             }
-        }) {
+        ) {
             Text("Entrar")
         }
 
@@ -50,6 +79,11 @@ fun LoginScreen(navController: NavController, usuarioViewModel: UsuarioViewModel
 
         TextButton(onClick = { navController.navigate("register") }) {
             Text("Não tem conta? Cadastre-se")
+        }
+
+        if (carregando) {
+            Spacer(Modifier.height(16.dp))
+            CircularProgressIndicator()
         }
 
         if (mensagem.isNotEmpty()) {
