@@ -3,122 +3,166 @@ package com.example.tcc.telas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import com.example.tcc.viewmodels.UsuarioViewModel
+import com.example.tcc.viewmodels.AuthState
+import com.example.tcc.viewmodels.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RegisterScreen(navController: NavController, usuarioViewModel: UsuarioViewModel) {
-    var nome by remember { mutableStateOf("") }
+fun RegisterScreen(
+    navController: NavController,
+    authViewModel: AuthViewModel = viewModel()
+) {
+    LaunchedEffect(Unit) {
+        authViewModel.resetAuthState()
+    }
+
     var email by remember { mutableStateOf("") }
     var senha by remember { mutableStateOf("") }
+    var confirmarSenha by remember { mutableStateOf("") }
+    val authState by authViewModel.authState.observeAsState(AuthState.Idle)
     var mensagem by remember { mutableStateOf("") }
 
-    val auth = FirebaseAuth.getInstance()
-    val db = FirebaseFirestore.getInstance()
-    val scope = rememberCoroutineScope() // ⚡ escopo para navegação
+    var stopChecking by remember { mutableStateOf(true) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Cadastro de Usuário") })
-        }
+        topBar = { TopAppBar(title = { Text("Cadastro") }) }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
-                .padding(paddingValues)
                 .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(paddingValues),
+            contentAlignment = Alignment.Center
         ) {
-            TextField(
-                value = nome,
-                onValueChange = { nome = it },
-                label = { Text("Nome") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text("Crie sua conta", fontSize = 22.sp)
+                Spacer(modifier = Modifier.height(20.dp))
 
-            TextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("E-mail") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("E-mail") },
+                    singleLine = true
+                )
 
-            TextField(
-                value = senha,
-                onValueChange = { senha = it },
-                label = { Text("Senha") },
-                modifier = Modifier.fillMaxWidth()
-            )
+                Spacer(modifier = Modifier.height(10.dp))
 
-            Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = senha,
+                    onValueChange = { senha = it },
+                    label = { Text("Senha") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
 
-            Button(
-                onClick = {
-                    if (nome.isNotBlank() && email.isNotBlank() && senha.isNotBlank()) {
-                        auth.createUserWithEmailAndPassword(email.trim(), senha.trim())
-                            .addOnCompleteListener { task ->
-                                if (task.isSuccessful) {
-                                    // Cadastro no Auth deu certo, podemos navegar
-                                    navController.navigate("login") {
-                                        popUpTo("register") { inclusive = true }
-                                    }
+                Spacer(modifier = Modifier.height(10.dp))
 
-                                    // Agora salva os dados extras em Firestore
-                                    val userId = auth.currentUser?.uid
-                                    if (userId != null) {
-                                        val dadosUsuario = hashMapOf(
-                                            "nome" to nome,
-                                            "email" to email.trim(),
-                                            "cidade_preferida_id" to null,
-                                            "cord_x" to null,
-                                            "cord_y" to null
-                                        )
-                                        db.collection("usuarios")
-                                            .document(userId)
-                                            .set(dadosUsuario)
-                                            .addOnFailureListener {
-                                                // opcional: mostrar Snackbar de erro, mas não bloqueia navegação
-                                            }
-                                    }
-                                } else {
-                                    mensagem = "Erro ao cadastrar: ${task.exception?.message}"
-                                }
-                            }
-                    } else {
-                        mensagem = "Preencha todos os campos!"
+                OutlinedTextField(
+                    value = confirmarSenha,
+                    onValueChange = { confirmarSenha = it },
+                    label = { Text("Confirmar Senha") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(onClick = {
+                    // Valida se todos os campos foram preenchidos
+                    if (email.isEmpty() || senha.isEmpty() || confirmarSenha.isEmpty()) {
+                        mensagem = "Por favor, preencha todos os campos."
+                        stopChecking = true
+                        return@Button
                     }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Cadastrar")
-            }
 
+                    // Valida se as senhas coincidem
+                    if (senha != confirmarSenha) {
+                        mensagem = "As senhas não coincidem."
+                        stopChecking = true
+                        return@Button
+                    }
 
-            Spacer(Modifier.height(8.dp))
+                    // Se passou nas validações, registra
+                    mensagem = ""
+                    authViewModel.register(email, senha)
+                    // stopChecking será alterado apenas no Success
+                }) {
+                    Text("Cadastrar")
+                }
 
-            TextButton(
-                onClick = { navController.navigate("login") },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Já tem conta? Entrar")
-            }
+                Spacer(modifier = Modifier.height(10.dp))
 
-            if (mensagem.isNotEmpty()) {
-                Spacer(Modifier.height(16.dp))
-                Text(mensagem)
+                TextButton(onClick = { navController.navigate("login") }) {
+                    Text("Já tem conta? Fazer login")
+                }
+
+                Spacer(modifier = Modifier.height(15.dp))
+
+                // Observa o estado de autenticação
+                LaunchedEffect(authState) {
+                    when (authState) {
+                        is AuthState.Success -> {
+                            mensagem = "Conta criada com sucesso! Verifique seu e-mail."
+                            stopChecking = false // inicia loop de verificação
+                        }
+
+                        is AuthState.Error -> {
+                            mensagem = (authState as AuthState.Error).message
+                            stopChecking = true // garante que loop não rode
+                        }
+
+                        else -> {}
+                    }
+                }
+
+                // Loop seguro de verificação de e-mail
+                LaunchedEffect(stopChecking) {
+                    if (!stopChecking) {
+                        while (!stopChecking) {
+                            delay(5000)
+
+                            val user = FirebaseAuth.getInstance().currentUser
+                            if (user != null) {
+                                user.reload().addOnCompleteListener {
+                                    if (user.isEmailVerified) {
+                                        stopChecking = true
+                                        navController.navigate("login") {
+                                            popUpTo("register") { inclusive = false }
+                                        }
+                                    }
+                                }
+                            } else {
+                                stopChecking = true
+                            }
+                        }
+                    }
+                }
+
+                // Mensagem de erro/sucesso
+                if (mensagem.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = mensagem,
+                        color = if (mensagem.contains("Verifique seu e-mail"))
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
     }
 }
-
-

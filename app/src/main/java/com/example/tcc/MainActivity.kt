@@ -9,14 +9,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import com.example.tcc.AppNavigation
 import com.example.tcc.ui.theme.TCCTheme
-import com.example.tcc.viewmodels.UsuarioViewModel
-import org.koin.androidx.viewmodel.ext.android.viewModel
+import com.example.tcc.viewmodels.AuthViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val usuarioViewModel: UsuarioViewModel by viewModel()
+    private val authViewModel = AuthViewModel()
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +28,7 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.padding(innerPadding)) {
                         AppNavigation(
                             navController = navController,
-                            usuarioViewModel = usuarioViewModel
+                            authViewModel = authViewModel
                         )
                     }
                 }

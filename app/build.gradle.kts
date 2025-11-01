@@ -50,6 +50,7 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-common-ktx")
+    implementation(libs.androidx.compose.runtime.livedata)
 
     // 🔹 Outras dependências do seu projeto
     val nav_version = "2.9.5"
