@@ -1,5 +1,6 @@
 package com.example.tcc.telas
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -9,10 +10,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.navigation.NavController
-import com.example.tcc.viewmodels.AuthState
+import androidx.compose.runtime.livedata.observeAsState
 import com.example.tcc.viewmodels.AuthViewModel
+import com.example.tcc.viewmodels.AuthState
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,13 +22,24 @@ fun RegisterScreen(
     navController: NavController,
     authViewModel: AuthViewModel = viewModel()
 ) {
-    var nome by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var senha by remember { mutableStateOf("") }
-    var confirmarSenha by remember { mutableStateOf("") }
-    var mensagem by remember { mutableStateOf("") }
+    // Mantém os campos e mensagens após girar a tela
+    var nome by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var senha by rememberSaveable { mutableStateOf("") }
+    var confirmarSenha by rememberSaveable { mutableStateOf("") }
+    var mensagem by rememberSaveable { mutableStateOf("") }
 
     val authState by authViewModel.authState.observeAsState(AuthState.Idle)
+
+    // 🔄 Só começa a verificar o e-mail após o cadastro ser concluído
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Success) {
+            while (true) {
+                delay(3000)
+                authViewModel.checkEmailVerification()
+            }
+        }
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Cadastro") }) }
@@ -38,9 +51,7 @@ fun RegisterScreen(
             contentAlignment = Alignment.Center
         ) {
             Column(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -50,9 +61,8 @@ fun RegisterScreen(
                 OutlinedTextField(
                     value = nome,
                     onValueChange = { nome = it },
-                    label = { Text("Nome completo") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    label = { Text("Nome") },
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -61,8 +71,7 @@ fun RegisterScreen(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("E-mail") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -72,8 +81,7 @@ fun RegisterScreen(
                     onValueChange = { senha = it },
                     label = { Text("Senha") },
                     visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
@@ -83,29 +91,25 @@ fun RegisterScreen(
                     onValueChange = { confirmarSenha = it },
                     label = { Text("Confirmar senha") },
                     visualTransformation = PasswordVisualTransformation(),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Button(
-                    onClick = {
-                        when {
-                            nome.isEmpty() || email.isEmpty() || senha.isEmpty() || confirmarSenha.isEmpty() ->
-                                mensagem = "Por favor, preencha todos os campos."
-                            senha != confirmarSenha ->
-                                mensagem = "As senhas não coincidem."
-                            !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() ->
-                                mensagem = "Formato de e-mail inválido."
-                            else -> {
-                                mensagem = ""
-                                authViewModel.register(email, senha, nome)
-                            }
+                Button(onClick = {
+                    when {
+                        nome.isEmpty() || email.isEmpty() || senha.isEmpty() || confirmarSenha.isEmpty() -> {
+                            mensagem = "Preencha todos os campos."
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                        senha != confirmarSenha -> {
+                            mensagem = "As senhas não coincidem."
+                        }
+                        else -> {
+                            mensagem = ""
+                            authViewModel.register(email, senha, nome)
+                        }
+                    }
+                }) {
                     Text("Cadastrar")
                 }
 
@@ -115,19 +119,21 @@ fun RegisterScreen(
                     Text("Já tem conta? Faça login")
                 }
 
-                Spacer(modifier = Modifier.height(15.dp))
-
-                // Observa o estado de autenticação
+                // Reage às mudanças de estado de autenticação
                 LaunchedEffect(authState) {
                     when (authState) {
                         is AuthState.Loading -> mensagem = "Cadastrando..."
-                        is AuthState.Success -> {
-                            mensagem = "Cadastro realizado com sucesso! Verifique seu e-mail."
-                            navController.navigate("login") {
-                                popUpTo("register") { inclusive = true }
-                            }
+                        is AuthState.Success -> mensagem =
+                            "Cadastro realizado! Verifique seu e-mail para continuar."
+                        is AuthState.EmailVerified -> {
+                            mensagem = "E-mail verificado! Redirecionando..."
+                            delay(2000)
+                            // 👇 não remove a tela de registro da pilha, permite voltar
+                            navController.navigate("login")
+                            authViewModel.resetAuthState()
                         }
-                        is AuthState.Error -> mensagem = (authState as AuthState.Error).message
+                        is AuthState.Error -> mensagem =
+                            (authState as AuthState.Error).message
                         else -> {}
                     }
                 }
@@ -136,8 +142,13 @@ fun RegisterScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = mensagem,
-                        color = if (mensagem.contains("sucesso")) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error
+                        color = if (mensagem.contains("sucesso", true)
+                            || mensagem.contains("verifique", true)
+                            || mensagem.contains("verificado", true)
+                        )
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package com.example.tcc.telas
 
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,15 +21,36 @@ fun LoginScreen(
     navController: NavController,
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // Resetar o estado de autenticação ao abrir a tela
     LaunchedEffect(Unit) {
         authViewModel.resetAuthState()
     }
 
-    var email by remember { mutableStateOf("") }
-    var senha by remember { mutableStateOf("") }
-    val authState by authViewModel.authState.observeAsState(AuthState.Idle)
-    var mensagem by remember { mutableStateOf("") }
+    // 🔒 Mantém os dados mesmo se girar a tela
+    var email by rememberSaveable { mutableStateOf("") }
+    var senha by rememberSaveable { mutableStateOf("") }
+    var mensagem by rememberSaveable { mutableStateOf("") }
 
+    val authState by authViewModel.authState.observeAsState(AuthState.Idle)
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthState.Loading -> mensagem = "Carregando..."
+            is AuthState.Success -> {
+                mensagem = "Login bem-sucedido!"
+                navController.navigate("home") {
+                    popUpTo("login") { inclusive = true }
+                }
+            }
+            is AuthState.Error -> {
+                val error = authState as AuthState.Error
+                mensagem = traduzErroFirebase(error.message, error.exception)
+            }
+            else -> {}
+        }
+    }
+    LaunchedEffect(Unit) {
+        authViewModel.resetAuthState()
+    }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Login") }) }
     ) { paddingValues ->
@@ -66,7 +88,6 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 Button(onClick = {
-                    // Validação local
                     when {
                         email.isEmpty() || senha.isEmpty() -> {
                             mensagem = "Por favor, preencha todos os campos."
@@ -91,35 +112,31 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(15.dp))
 
-                // Observa estado de autenticação
-                LaunchedEffect(authState) {
-                    when (authState) {
-                        is AuthState.Loading -> {
-                            mensagem = "Carregando..."
-                        }
-                        is AuthState.Success -> {
-                            // Navega para tela inicial ("home") e remove login da pilha
-                            navController.navigate("home") {
-                                popUpTo("login") { inclusive = true } // evita voltar para login
-                            }
-                        }
-                        is AuthState.Error -> {
-                            mensagem = (authState as AuthState.Error).message
-                        }
-                        else -> {}
-                    }
-                }
+                // 🔁 Observa e reage ao estado da autenticação
 
 
                 if (mensagem.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = mensagem,
-                        color = if (mensagem.contains("sucesso")) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.error
+                        color = if (mensagem.contains("sucesso", true))
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.error
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Traduz as mensagens padrão do FirebaseAuth para português mais amigável.
+ */
+private fun traduzErroFirebase(message: String?, exception: Throwable?): String {
+    if (message?.contains("supplied auth credential", true) == true) {
+        return "As credenciais estão incorretas."
+    }
+    else { return "Erro desconhecido. Tente novamente."}
+    // ... resto dos casos
 }

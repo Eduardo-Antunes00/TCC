@@ -3,141 +3,190 @@ package com.example.tcc.viewmodels
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.tcc.repositories.UserRepository
-import com.example.tcc.database.model.User
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 
 sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
     object Success : AuthState()
     object EmailVerified : AuthState()
-    data class Error(val message: String) : AuthState()
+    data class Error(
+        val message: String,
+        val exception: Throwable? = null  // NOVO: exceção completa
+    ) : AuthState()
 }
 
-class AuthViewModel : ViewModel() {
-    private val auth = FirebaseAuth.getInstance()
-    private val userRepo = UserRepository()
-    private val _authState = MutableLiveData<AuthState>(AuthState.Idle)
-    val authState: LiveData<AuthState> = _authState
 
-    fun register(email: String, senha: String, nome: String) {
-        _authState.value = AuthState.Loading
-        auth.createUserWithEmailAndPassword(email, senha)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
+    class AuthViewModel : ViewModel() {
+        private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+        private val firestore = FirebaseFirestore.getInstance()
 
-                    val userId = auth.currentUser?.uid ?: return@addOnCompleteListener
+        private val _authState = MutableLiveData<AuthState>(AuthState.Idle)
+        val authState: LiveData<AuthState> = _authState
 
+        private var verificationJob: Job? = null
+        private val viewModelScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+        // ================================
+        // REGISTRO
+        // ================================
+        fun register(email: String, password: String, nome: String) {
+            _authState.value = AuthState.Loading
+
+            viewModelScope.launch {
+                try {
+                    // 1. Cria usuário no Firebase Auth
+                    val authResult = auth.createUserWithEmailAndPassword(email, password).await()
+                    val user = authResult.user ?: throw Exception("Usuário não criado.")
+
+                    val userId = user.uid
+
+                    // 2. Salva dados no Firestore
                     val userData = hashMapOf(
                         "id" to userId,
-                        "nome" to nome, // precisa passar o nome junto no cadastro
+                        "nome" to nome,
                         "email" to email,
                         "cordx" to null,
                         "cordy" to null,
                         "mapaAtualId" to null
                     )
-                    FirebaseFirestore.getInstance()
-                        .collection("usuarios")
+
+                    firestore.collection("usuarios")
                         .document(userId)
                         .set(userData)
-                        .addOnSuccessListener {
-                            _authState.value = AuthState.Success
-                        }
-                        .addOnFailureListener {
-                            _authState.value = AuthState.Error("Erro ao salvar dados do usuário.")
-                        }
+                        .await()
 
-                    val user = auth.currentUser
-                    if (user != null) {
-                        // envia o e-mail de verificação
-                        user.sendEmailVerification().addOnCompleteListener {
-                            // salva no Firestore
-                            viewModelScope.launch {
-                                val newUser = User(
-                                    id = user.uid,
-                                    nome = nome,
-                                    email = email,
-                                    senha = senha
-                                )
-                                userRepo.addUser(newUser)
-                                _authState.value = AuthState.Success
-                            }
-                        }
-                    }
-                } else {
-                    val exception = task.exception
-                    val mensagemErro = if (exception is com.google.firebase.auth.FirebaseAuthException) {
-                        when (exception.errorCode) {
-                            "ERROR_INVALID_EMAIL" -> "Formato de e-mail inválido."
-                            "ERROR_EMAIL_ALREADY_IN_USE" -> "E-mail já está em uso."
-                            "ERROR_WEAK_PASSWORD" -> "A senha deve ter no mínimo 6 caracteres."
-                            else -> exception.localizedMessage ?: "Erro ao cadastrar."
-                        }
-                    } else {
-                        exception?.localizedMessage ?: "Erro ao cadastrar."
-                    }
-                    _authState.value = AuthState.Error(mensagemErro)
+                    // 3. Envia e-mail de verificação
+                    user.sendEmailVerification().await()
+
+                    _authState.value = AuthState.Success
+                    startEmailVerificationWatcher(user)
+
+                } catch (e: Exception) {
+                    _authState.value = AuthState.Error(
+                        message = e.localizedMessage ?: "Erro ao cadastrar.",
+                        exception = e
+                    )
                 }
             }
-    }
-
-    fun login(email: String, senha: String) {
-        _authState.value = AuthState.Loading
-
-        if (email.isEmpty() || senha.isEmpty()) {
-            _authState.value = AuthState.Error("Por favor, preencha todos os campos.")
-            return
-        }
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            _authState.value = AuthState.Error("Formato de e-mail inválido.")
-            return
         }
 
-        auth.signInWithEmailAndPassword(email, senha)
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val user = auth.currentUser
-                    if (user != null && user.isEmailVerified) {
-                        // garante que o usuário também exista no Firestore
-                        viewModelScope.launch {
-                            val existing = userRepo.getUserById(user.uid)
-                            if (existing == null) {
-                                val newUser = User(
-                                    id = user.uid,
-                                    nome = user.displayName ?: "",
-                                    email = user.email ?: "",
-                                    senha = senha
-                                )
-                                userRepo.addUser(newUser)
-                            }
-                            _authState.value = AuthState.Success
-                        }
+        // ================================
+        // LOGIN
+        // ================================
+        fun login(email: String, password: String) {
+            _authState.value = AuthState.Loading
+
+            viewModelScope.launch {
+                try {
+                    val result = auth.signInWithEmailAndPassword(email, password).await()
+                    val user = result.user ?: throw IllegalStateException("Usuário não encontrado após login.")
+
+                    user.reload().await()
+
+                    if (user.isEmailVerified) {
+                        _authState.value = AuthState.Success
                     } else {
-                        _authState.value = AuthState.Error("E-mail ainda não verificado.")
                         auth.signOut()
+                        _authState.value = AuthState.Error(
+                            message = "Verifique seu e-mail antes de fazer login.",
+                            exception = null
+                        )
                     }
-                } else {
-                    _authState.value = AuthState.Error("E-mail ou senha incorretos.")
-                }
-            }
-    }
+                } catch (e: Exception) {
+                    val errorMessage = when {
+                        e is com.google.firebase.auth.FirebaseAuthInvalidUserException -> {
+                            "Usuário não encontrado. Verifique o e-mail."
+                        }
+                        e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> {
+                            when {
+                                e.errorCode == "ERROR_INVALID_CREDENTIAL" -> {
+                                    "As credenciais estão incorretas, malformadas ou expiradas."
+                                }
+                                e.message?.contains("password", true) == true -> {
+                                    "Senha incorreta."
+                                }
+                                else -> "Credenciais inválidas."
+                            }
+                        }
+                        e is com.google.firebase.auth.FirebaseAuthException -> {
+                            when (e.errorCode) {
+                                "ERROR_WRONG_PASSWORD" -> "Senha incorreta."
+                                "ERROR_USER_NOT_FOUND" -> "Usuário não encontrado."
+                                "ERROR_TOO_MANY_REQUESTS" -> "Muitas tentativas. Tente novamente mais tarde."
+                                "ERROR_NETWORK_REQUEST_FAILED" -> "Erro de conexão. Verifique sua internet."
+                                else -> e.localizedMessage ?: "Erro ao fazer login."
+                            }
+                        }
+                        else -> e.localizedMessage ?: "Erro desconhecido."
+                    }
 
-    fun checkEmailVerification() {
-        val user = auth.currentUser
-        if (user != null) {
-            user.reload().addOnCompleteListener { reloadTask ->
-                if (reloadTask.isSuccessful && user.isEmailVerified) {
-                    _authState.value = AuthState.EmailVerified
+                    _authState.value = AuthState.Error(
+                        message = errorMessage,
+                        exception = e
+                    )
                 }
             }
         }
+
+        // ================================
+        // VERIFICAÇÃO DE E-MAIL
+        // ================================
+        fun checkEmailVerification() {
+            val user = auth.currentUser ?: return
+            viewModelScope.launch {
+                try {
+                    user.reload().await()
+                    if (user.isEmailVerified) {
+                        _authState.value = AuthState.EmailVerified
+                        stopVerificationWatcher()
+                    }
+                } catch (e: Exception) {
+                    // Silencioso: só tenta de novo depois
+                }
+            }
+        }
+
+        private fun startEmailVerificationWatcher(user: FirebaseUser) {
+            stopVerificationWatcher()
+            verificationJob = viewModelScope.launch {
+                while (isActive) {
+                    delay(3000)
+                    try {
+                        user.reload().await()
+                        if (user.isEmailVerified) {
+                            _authState.value = AuthState.EmailVerified
+                            stopVerificationWatcher()
+                            break
+                        }
+                    } catch (e: Exception) {
+                        // Ignora erros de rede temporários
+                    }
+                }
+            }
+        }
+
+        private fun stopVerificationWatcher() {
+            verificationJob?.cancel()
+            verificationJob = null
+        }
+
+        // ================================
+        // RESET
+        // ================================
+        fun resetAuthState() {
+            _authState.value = AuthState.Idle
+            stopVerificationWatcher()
+        }
+
+        override fun onCleared() {
+            super.onCleared()
+            stopVerificationWatcher()
+            viewModelScope.cancel()
+        }
     }
 
-    fun resetAuthState() {
-        _authState.value = AuthState.Idle
-    }
-}

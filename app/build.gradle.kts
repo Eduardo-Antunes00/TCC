@@ -42,9 +42,9 @@ android {
 }
 
 dependencies {
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
     // 🔹 Firebase BOM (controla versões automaticamente)
     implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-
     // 🔹 Dependências do Firebase (sem número de versão!)
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
