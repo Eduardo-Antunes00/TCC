@@ -11,11 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
 import com.example.tcc.ui.theme.TCCTheme
 import com.example.tcc.viewmodels.AuthViewModel
+import com.example.tcc.viewmodels.MapViewModel
 
 class MainActivity : ComponentActivity() {
 
     private val authViewModel = AuthViewModel()
-
+    private val mapViewModel = MapViewModel()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,7 +29,8 @@ class MainActivity : ComponentActivity() {
                     Box(modifier = Modifier.padding(innerPadding)) {
                         AppNavigation(
                             navController = navController,
-                            authViewModel = authViewModel
+                            authViewModel = authViewModel,
+                            mapViewModel = mapViewModel
                         )
                     }
                 }

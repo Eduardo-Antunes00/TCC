@@ -1,7 +1,11 @@
 package com.example.tcc.viewmodels
 
+import android.graphics.Color  // CORRETO para OSMDroid
+import android.nfc.Tag
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.tcc.database.model.Route
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,11 +15,6 @@ import kotlinx.coroutines.tasks.await
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.util.GeoPoint
 
-data class MapaTrajeto(
-    val id: String,
-    val nome: String,
-    val pontos: List<GeoPoint>
-)
 
 class MapViewModel : ViewModel() {
 
@@ -27,23 +26,12 @@ class MapViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    init {
-        val polyline = Polyline().apply {
-            title = "linha_teste"
-            color = 0xFFFF0000.toInt()
-            width = 80f // MUITO GROSSA
-            isGeodesic = true
-            addPoint(GeoPoint(-29.77812, -57.102036))
-            addPoint(GeoPoint(-29.778097, -57.100419))
-        }
-        _polylines.value = listOf(polyline)
-    }
 
     fun carregarTrajetos() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val result = firestore.collection("mapas")
+                val result = firestore.collection("rotas")
                     .get()
                     .await()
 
@@ -51,38 +39,94 @@ class MapViewModel : ViewModel() {
 
                 for (doc in result.documents) {
                     val id = doc.id
-                    val nome = doc.getString("nome") ?: "Trajeto"
-                    val array = doc.get("array") as? List<Map<String, Any>>  // Any, não Double!
+                    val nome = doc.getString("nome") ?: "Rota $id"
+                    val corString = doc.getString("cor") ?: "#FF0000" // Padrão: vermelho
 
-                    if (array != null && array.size >= 2) {
-                        val polyline = Polyline().apply {
-                            title = "linha_$id"
-                            color = 0xFFFF0000.toInt() // VERMELHO para teste
-                            width = 15f
-                            isGeodesic = true
-                        }
+                    // Converte HEX string para int (ex: "#FF5733" → Color.parseColor)
+                    val corInt = try {
+                        Color.parseColor(corString.uppercase())
+                    } catch (e: Exception) {
+                        0xFFFF0000.toInt() // Vermelho com alpha total (fallback)
+                    }
 
-                        array.forEach { ponto ->
-                            val lat = (ponto["lat"] as? Number)?.toDouble() ?: return@forEach
-                            val lng = (ponto["lng"] as? Number)?.toDouble() ?: return@forEach
+                    val codigoArray = doc.get("codigo") as? List<Map<String, Any>>
+
+                    if (codigoArray.isNullOrEmpty() || codigoArray.size < 2) continue
+
+                    val polyline = Polyline().apply {
+                        title = nome
+                        color = corInt
+                        width = 8f
+                        isGeodesic = true
+                    }
+
+                    var pontosValidos = 0
+                    for (ponto in codigoArray) {
+                        val lat = (ponto["lat"] as? Number)?.toDouble()
+                        val lng = (ponto["lng"] as? Number)?.toDouble()
+
+                        if (lat != null && lng != null) {
                             polyline.addPoint(GeoPoint(lat, lng))
+                            pontosValidos++
                         }
+                    }
 
+                    if (pontosValidos >= 2) {
                         novasLinhas.add(polyline)
                     }
                 }
 
                 _polylines.value = novasLinhas
+
             } catch (e: Exception) {
-                // Tratar erro (opcional)
+                e.printStackTrace()
             } finally {
                 _isLoading.value = false
             }
         }
     }
 
+
     override fun onCleared() {
         super.onCleared()
         _polylines.value = emptyList()
+    }
+
+}
+
+
+suspend fun pegarRotas(): List<Route> {
+    return try {
+        val snapshot = FirebaseFirestore.getInstance()
+            .collection("rotas")
+            .get()
+            .await()
+
+        snapshot.documents.mapNotNull { doc ->
+            val idRaw = doc.get("id")
+            val id = when (idRaw) {
+                is String -> idRaw
+                is Number -> idRaw.toString()
+                else -> doc.id  // fallback: ID do documento
+            }
+            val nome = doc.getString("nome") ?: "Rota $id"
+            val cor = doc.getString("cor") ?: "#FF0000"
+
+            val pontos = (doc.get("codigo") as? List<Map<String, Any>>)
+                ?.mapNotNull { ponto ->
+                    // Leia na ordem que o Firestore está mandando
+                    val lng = (ponto["lng"] as? Number)?.toDouble()
+                    val lat = (ponto["lat"] as? Number)?.toDouble()
+                    if (lat != null && lng != null) {
+                        GeoPoint(lat, lng)  // GeoPoint(lat, lng) ← ordem correta!
+                    } else null
+                }
+                ?.takeIf { it.size >= 2 } ?: return@mapNotNull null
+
+            Route(id, nome, cor, pontos)
+        }
+    } catch (e: Exception) {
+        Log.e("ROTAS", "Erro ao carregar rotas", e)
+        emptyList()
     }
 }

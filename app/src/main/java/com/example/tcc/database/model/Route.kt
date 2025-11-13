@@ -1,7 +1,10 @@
 package com.example.tcc.database.model
 
+import org.osmdroid.util.GeoPoint
+
 data class Route(
-    val id: Int = 0,
+    val id: String = "",
     val nome: String = "",
-    val codigo: String = ""
+    val cor: String = "",
+    val codigo: List<GeoPoint>
 )

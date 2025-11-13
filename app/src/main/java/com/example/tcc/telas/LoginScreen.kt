@@ -43,7 +43,7 @@ fun LoginScreen(
             }
             is AuthState.Error -> {
                 val error = authState as AuthState.Error
-                mensagem = traduzErroFirebase(error.message, error.exception)
+                mensagem = "As credenciais estão incorretas."
             }
             else -> {}
         }
@@ -130,13 +130,3 @@ fun LoginScreen(
     }
 }
 
-/**
- * Traduz as mensagens padrão do FirebaseAuth para português mais amigável.
- */
-private fun traduzErroFirebase(message: String?, exception: Throwable?): String {
-    if (message?.contains("supplied auth credential", true) == true) {
-        return "As credenciais estão incorretas."
-    }
-    else { return "Erro desconhecido. Tente novamente."}
-    // ... resto dos casos
-}
