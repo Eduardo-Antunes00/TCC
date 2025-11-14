@@ -6,5 +6,5 @@ data class Route(
     val id: String = "",
     val nome: String = "",
     val cor: String = "",
-    val codigo: List<GeoPoint>
+    val pontos: List<GeoPoint>
 )
