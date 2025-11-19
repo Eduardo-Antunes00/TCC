@@ -1,5 +1,6 @@
 package com.example.tcc.telas
 
+import androidx.compose.foundation.Image
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -14,7 +15,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -28,192 +33,177 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Polyline
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     navController: NavController,
     mapViewModel: MapViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-    // Estados
     var rotas by remember { mutableStateOf<List<Route>>(emptyList()) }
     val polylines by mapViewModel.polylines.collectAsState()
     val isLoading by mapViewModel.isLoading.collectAsState()
-    val mapViewState = remember { mutableStateOf<MapView?>(null) }
 
-    // Carregar rotas
+    // CORES AZUIS
+    val azulPrincipal = Color(0xFF0066FF)
+    val azulClaro = Color(0xFF00D4FF)
+    val azulEscuro = Color(0xFF003366)
+    val fundoDrawer = Color(0xFFF8FBFF)
+
     LaunchedEffect(Unit) {
         mapViewModel.carregarTrajetos()
         rotas = pegarRotas()
     }
 
-    // Menu lateral (Drawer)
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = drawerState.isOpen, // ← AQUI: só ativa gestos quando aberto
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = Color(0xFFF5F5F5),
-                drawerTonalElevation = 8.dp
-            ) {
-                Spacer(Modifier.height(24.dp))
-                Text(
-                    "Menu",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 24.dp, bottom = 16.dp)
-                )
+            ModalDrawerSheet(drawerContainerColor = fundoDrawer, drawerTonalElevation = 12.dp) {
+                Spacer(Modifier.height(32.dp))
+                Column(modifier = Modifier.padding(24.dp)) {
+                    Image(
+                        painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        colorFilter = ColorFilter.tint(azulPrincipal)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Mobilidade Urbana", style = MaterialTheme.typography.headlineSmall, color = azulEscuro)
+                }
+                Divider(color = azulClaro.copy(alpha = 0.3f))
 
-                // === ITENS DO MENU ===
                 NavigationDrawerItem(
-                    label = { Text("Perfil") },
+                    label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate("perfil") {
-                            popUpTo(navController.graph.findStartDestination().id)
-                            launchSingleTop = true
-                        }
-                    },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Perfil") },
+                    onClick = { scope.launch { drawerState.close() } },
+                    icon = { Icon(Icons.Default.Person, contentDescription = "Pessoa", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
                 NavigationDrawerItem(
-                    label = { Text("Ouvidoria") },
+                    label = { Text("Ouvidoria", color = azulEscuro) },
                     selected = false,
-                    onClick = {
-                        scope.launch { drawerState.close() }
-                        // TODO: Implementar tela de ouvidoria
-                    },
-                    icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria") },
+                    onClick = { scope.launch { drawerState.close() } },
+                    icon = { Icon(Icons.Default.Call, contentDescription = "Telefone", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
                 Spacer(Modifier.weight(1f))
 
-                // Botão Sair
                 TextButton(
                     onClick = {
                         scope.launch { drawerState.close() }
                         FirebaseAuth.getInstance().signOut()
-                        navController.navigate("login") {
-                            popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
-                        }
+                        navController.navigate("login") { popUpTo(0) { inclusive = true } }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
+                    modifier = Modifier.fillMaxWidth().padding(16.dp)
                 ) {
                     Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.Red)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Sair", color = Color.Red)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
                 }
             }
-        },
-        content = {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("Mobilidade Urbana") },
-                        navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(Icons.Default.Menu, contentDescription = "Abrir menu")
-                            }
-                        },
-                        modifier = Modifier.height(80.dp),
-                        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "Mobilidade Urbana",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
-                    )
-                }
-            ) { paddingValues ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    BoxWithConstraints {
-                        val mapHeight = maxHeight * 6f / 16f
-
-                        // === MAPA ===
-                        AndroidView(
-                            factory = { ctx ->
-                                MapView(ctx).apply {
-                                    setTileSource(TileSourceFactory.MAPNIK)
-                                    setMultiTouchControls(true)
-                                    setTilesScaledToDpi(true)
-                                    controller.setZoom(14.0)
-                                    controller.setCenter(GeoPoint(-29.7596, -57.0857))
-                                    mapViewState.value = this
-                                }
-                            },
-                            update = { map ->
-                                mapViewState.value = map
-                                map.overlays.removeAll { it is Polyline }
-                                polylines.forEach { map.overlays.add(it) }
-                                map.invalidate()
-                            },
-                            onRelease = { map ->
-                                map.overlays.clear()
-                                map.onDetach()
-                                mapViewState.value = null
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(mapHeight)
-                                .align(Alignment.TopCenter)
-                                .clipToBounds()
-                        )
-
-                        // === LOADING ===
-                        if (isLoading) {
-                            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(Icons.Default.Menu, tint = Color.White, contentDescription = "Menu")
                         }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
+                )
+            },
+            containerColor = Color(0xFFF0F7FF)
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues)) {
 
-                        // === LISTA DE ROTAS (parte inferior) ===
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(bottom = maxHeight * 0.2f),
-                            verticalArrangement = Arrangement.Bottom,
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            LazyColumn(
+                // === MAPA EM TELA CHEIA ===
+                AndroidView(
+                    factory = { ctx ->
+                        MapView(ctx).apply {
+                            setTileSource(TileSourceFactory.MAPNIK)
+                            setMultiTouchControls(true)
+                            setTilesScaledToDpi(true)
+                            controller.setZoom(13.7)
+                            controller.setCenter(GeoPoint(-29.770881, -57.086261))
+                        }
+                    },
+                    update = { map ->
+                        map.overlays.removeAll { it is Polyline }
+                        polylines.forEach { map.overlays.add(it) }
+                        map.invalidate()
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // === LISTA DE ROTAS FLUTUANTE (SÓ NA PARTE DE BAIXO, NÃO COBRE O MAPA) ===
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 1.0f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .heightIn(max = 300.dp) // não cresce demais
+                    ) {
+                        items(rotas) { rota ->
+                            Button(
+                                onClick = { navController.navigate("route/${rota.id}") },
+                                colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
                                 modifier = Modifier
-                                    .width(200.dp)
-                                    .height(200.dp)
-                                    .background(Color.White.copy(alpha = 0.9f))
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .padding(8.dp)
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
+                                    .height(62.dp)
                             ) {
-                                items(rotas) { rota ->
-                                    Button(
-                                        onClick = {
-                                            navController.navigate("route/${rota.id}") {
-                                                popUpTo(navController.graph.findStartDestination().id)
-                                                launchSingleTop = true
-                                            }
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp)
-                                    ) {
-                                        Text(rota.nome, style = MaterialTheme.typography.bodyMedium)
-                                    }
-                                }
+                                Image(
+                                    painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
+                                    contentDescription = "Ônibus",
+                                    modifier = Modifier.size(28.dp),
+                                    colorFilter = ColorFilter.tint(Color.White)
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Text(
+                                    text = rota.nome,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
                     }
                 }
+
+                // === LOADING ===
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = azulPrincipal,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
             }
         }
-    )
+    }
 }
-
 // Composable de permissão (agora existe!)
 @Composable
 private fun PermissionScreen(onRequestPermission: () -> Unit) {
@@ -226,6 +216,43 @@ private fun PermissionScreen(onRequestPermission: () -> Unit) {
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onRequestPermission) {
             Text("Conceder permissão")
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CompactCenteredTopAppBar(
+    title: String,
+    onMenuClick: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 3.dp
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .statusBarsPadding()
+        ) {
+            // Ícone do menu (esquerda)
+            IconButton(
+                onClick = onMenuClick,
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Icon(Icons.Default.Menu, contentDescription = "Abrir menu")
+            }
+
+            // TÍTULO CENTRALIZADO PERFEITO
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 72.dp) // ← espaço pros lados (nunca mais corta)
+            )
         }
     }
 }

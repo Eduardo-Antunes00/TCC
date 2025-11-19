@@ -188,5 +188,22 @@ sealed class AuthState {
             stopVerificationWatcher()
             viewModelScope.cancel()
         }
+        // ================================
+// VERIFICA USUÁRIO JÁ LOGADO
+// ================================
+        fun checkCurrentUser(): FirebaseUser? {
+            return auth.currentUser?.takeIf { it.isEmailVerified }
+        }
+
+        // Força reload pra garantir que o email foi verificado
+        suspend fun verifyCurrentUser(): Boolean {
+            return try {
+                val user = auth.currentUser ?: return false
+                user.reload().await()
+                user.isEmailVerified
+            } catch (e: Exception) {
+                false
+            }
+        }
     }
 

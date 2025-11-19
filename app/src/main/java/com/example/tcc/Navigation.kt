@@ -12,26 +12,28 @@ import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.MapViewModel
 
 @Composable
-fun AppNavigation(navController: NavHostController, authViewModel: AuthViewModel, mapViewModel: MapViewModel) {
+fun AppNavigation(
+    navController: NavHostController,
+    authViewModel: AuthViewModel,
+    mapViewModel: MapViewModel,
+    startDestination: String = "login"
+) {
     NavHost(
         navController = navController,
-        startDestination = "login"
+        startDestination = startDestination
     ) {
         composable("login") {
-            LoginScreen(navController, authViewModel)
+            LoginScreen(navController = navController, authViewModel = authViewModel)
         }
         composable("register") {
-            RegisterScreen(navController, authViewModel)
+            RegisterScreen(navController = navController, authViewModel = authViewModel)
         }
         composable("home") {
-            HomeScreen(navController,mapViewModel)
+            HomeScreen(navController = navController, mapViewModel = mapViewModel)
         }
-        composable("route/{id}"){
-            backStackEntry ->
+        composable("route/{id}") { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: "1"
-            RouteScreen(navController, id)
+            RouteScreen(navController = navController, routeId = id)
         }
-
     }
 }
-
