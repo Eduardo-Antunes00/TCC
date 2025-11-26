@@ -105,7 +105,7 @@ fun RouteScreen(
                         val tintColor = if (parada.id == paradaSelecionada)
                             android.graphics.Color.parseColor("#0066FF") // azul quando selecionado
                         else
-                            android.graphics.Color.parseColor("#0066FF") // MUDAR PARA VERDEEEEEEEEEEEEEEEEEEEEEEE
+                            android.graphics.Color.parseColor("#00FF00") // MUDAR PARA VERDEEEEEEEEEEEEEEEEEEEEEEE
 
                         icon = ContextCompat.getDrawable(context, com.example.tcc.R.drawable.outline_pin_drop_24)?.apply {
                             setTint(tintColor)

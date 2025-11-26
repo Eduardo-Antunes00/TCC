@@ -32,6 +32,7 @@ fun LoginScreen(
     var mensagem by rememberSaveable { mutableStateOf("") }
 
     val authState by authViewModel.authState.observeAsState(AuthState.Idle)
+
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Loading -> mensagem = "Carregando..."
