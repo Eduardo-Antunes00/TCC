@@ -103,9 +103,9 @@ fun RouteScreen(
 
                         // Usa seu outline_bus_alert_24 como pin (azul ou vermelho se selecionado)
                         val tintColor = if (parada.id == paradaSelecionada)
-                            android.graphics.Color.parseColor("#0066FF") // azul quando selecionado
-                        else
                             android.graphics.Color.parseColor("#00FF00") // MUDAR PARA VERDEEEEEEEEEEEEEEEEEEEEEEE
+                        else
+                            android.graphics.Color.parseColor("#0066FF") // azul quando selecionado
 
                         icon = ContextCompat.getDrawable(context, com.example.tcc.R.drawable.outline_pin_drop_24)?.apply {
                             setTint(tintColor)

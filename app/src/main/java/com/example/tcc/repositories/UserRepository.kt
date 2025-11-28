@@ -10,7 +10,8 @@ class UserRepository {
     private val usersCollection = db.collection("usuarios")
 
     suspend fun addUser(user: User) {
-        usersCollection.document(user.id).set(user).await()
+        usersCollection.document(user.id ?: throw IllegalArgumentException("User ID não pode ser nulo"))
+            .set(user).await()
     }
 
     suspend fun getUserById(id: String): User? {

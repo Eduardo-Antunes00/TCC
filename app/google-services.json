@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:584218030043:android:6adda7159fa34902fac1fe",
+        "android_client_info": {
+          "package_name": "com.example.mobilidadeurbana"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZnwFzLi75O7iPg7SMybaRGb8w9Llr66g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:584218030043:android:2d7dcfcec3375eb2fac1fe",
         "android_client_info": {
           "package_name": "com.example.tcc"

@@ -1,5 +1,6 @@
 package com.example.tcc.telas
 
+import android.content.Intent
 import androidx.compose.foundation.Image
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.compose.foundation.background
@@ -56,7 +57,7 @@ fun HomeScreen(
         mapViewModel.carregarTrajetos()
         rotas = pegarRotas()
     }
-
+//Menu
     ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = drawerState.isOpen,
@@ -78,16 +79,29 @@ fun HomeScreen(
                 NavigationDrawerItem(
                     label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
-                    onClick = { scope.launch { drawerState.close() } },
+                    onClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        navController.navigate("profile") // Navega para a tela de perfil
+                    },
                     icon = { Icon(Icons.Default.Person, contentDescription = "Pessoa", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
-
+                val context = LocalContext.current
                 NavigationDrawerItem(
                     label = { Text("Ouvidoria", color = azulEscuro) },
                     selected = false,
-                    onClick = { scope.launch { drawerState.close() } },
-                    icon = { Icon(Icons.Default.Call, contentDescription = "Telefone", tint = azulPrincipal) },
+                    onClick = {
+                        scope.launch { drawerState.close() }
+
+                        // Agora o context foi declarado lá em cima, dentro do lado de fora
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            data = android.net.Uri.parse("https://wa.me/555592475454")
+                        }
+                        context.startActivity(intent)
+                    },
+                    icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -107,7 +121,7 @@ fun HomeScreen(
                 }
             }
         }
-    ) {
+    ) {//Menu Flutuante
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(

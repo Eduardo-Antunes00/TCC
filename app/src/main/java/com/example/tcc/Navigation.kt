@@ -7,6 +7,7 @@ import androidx.navigation.compose.composable
 import com.example.tcc.telas.HomeScreen
 import com.example.tcc.telas.RegisterScreen
 import com.example.tcc.telas.LoginScreen
+import com.example.tcc.telas.ProfileScreen
 import com.example.tcc.telas.RouteScreen
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.MapViewModel
@@ -34,6 +35,9 @@ fun AppNavigation(
         composable("route/{id}") { backStackEntry ->
             val id = backStackEntry.arguments?.getString("id") ?: "1"
             RouteScreen(navController = navController, routeId = id)
+        }
+        composable("profile") { // Rota para a tela de perfil
+            ProfileScreen(navController = navController)
         }
     }
 }

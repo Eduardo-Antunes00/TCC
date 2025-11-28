@@ -52,7 +52,6 @@ sealed class AuthState {
                         "email" to email,
                         "cordx" to null,
                         "cordy" to null,
-                        "mapaAtualId" to null
                     )
 
                     firestore.collection("usuarios")
