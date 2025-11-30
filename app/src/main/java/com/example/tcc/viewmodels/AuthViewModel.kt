@@ -55,6 +55,8 @@ sealed class AuthState {
                         "email" to email,
                         "cordx" to null,
                         "cordy" to null,
+                        "acesso" to 1L,  // 1 = usuário comum, 2 = administrador"
+                        "ativo" to true
                     )
 
                     firestore.collection("usuarios")
@@ -101,7 +103,7 @@ sealed class AuthState {
                         return@launch
                     }
 
-                    // 3. Busca o campo "acesso" no Firestore
+                    // 3. Busca dados no Firestore
                     val userDoc = firestore.collection("usuarios")
                         .document(user.uid)
                         .get()
@@ -113,10 +115,21 @@ sealed class AuthState {
                         return@launch
                     }
 
-                    val acesso = userDoc.getLong("acesso") ?: 1L  // padrão = 1 se não existir
+                    // NOVO: Verifica se o usuário está ativo
+                    val ativo = userDoc.getBoolean("ativo") ?: true
+                    if (!ativo) {
+                        auth.signOut()
+                        _authState.value = AuthState.Error(
+                            message = "Esta conta foi desativada pelo administrador.",
+                            exception = null
+                        )
+                        return@launch
+                    }
 
-                    // 4. Emite sucesso + tipo de acesso
-                    _authState.value = AuthState.Success(acesso)  // já está assim no código que te mandei
+                    val acesso = userDoc.getLong("acesso") ?: 1L
+
+                    // 4. Login bem-sucedido
+                    _authState.value = AuthState.Success(acesso)
 
                 } catch (e: Exception) {
                     val errorMessage = when {
@@ -124,18 +137,14 @@ sealed class AuthState {
                             "Usuário não encontrado. Verifique o e-mail."
                         }
                         e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> {
-                            if (e.errorCode == "ERROR_INVALID_CREDENTIAL") {
-                                "As credenciais estão incorretas, malformadas ou expiradas."
-                            } else {
-                                "Senha incorreta."
-                            }
+                            "E-mail ou senha incorretos."
                         }
                         e is com.google.firebase.auth.FirebaseAuthException -> {
                             when (e.errorCode) {
                                 "ERROR_WRONG_PASSWORD" -> "Senha incorreta."
                                 "ERROR_USER_NOT_FOUND" -> "Usuário não encontrado."
                                 "ERROR_TOO_MANY_REQUESTS" -> "Muitas tentativas. Tente novamente mais tarde."
-                                "ERROR_NETWORK_REQUEST_FAILED" -> "Erro de conexão. Verifique sua internet."
+                                "ERROR_NETWORK_REQUEST_FAILED" -> "Sem conexão com a internet."
                                 else -> e.localizedMessage ?: "Erro ao fazer login."
                             }
                         }

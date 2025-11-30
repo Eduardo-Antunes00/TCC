@@ -5,13 +5,13 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.tcc.telas.HomeScreen
-import com.example.tcc.telas.HomeScreenAdm
+import com.example.tcc.telas_adm.HomeScreenAdm
 import com.example.tcc.telas.RegisterScreen
 import com.example.tcc.telas.LoginScreen
 import com.example.tcc.telas.ProfileScreen
-import com.example.tcc.telas.RouteEditScreenAdm
+import com.example.tcc.telas_adm.RouteEditScreenAdm
 import com.example.tcc.telas.RouteScreen
-import com.example.tcc.telas.UsersScreenAdm
+import com.example.tcc.telas_adm.UsersScreenAdm
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.MapViewModel
 

@@ -4,7 +4,10 @@ package com.example.tcc.viewmodels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tcc.database.model.User
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,9 +29,11 @@ class UsersViewModel : ViewModel() {
 
     private val _isLoadingEdit = MutableStateFlow(false)
     val isLoadingEdit: StateFlow<Boolean> = _isLoadingEdit.asStateFlow()
+
     init {
         loadUsers()
     }
+
     fun selectUserForEdit(id: String) {
         _isLoadingEdit.value = true
         viewModelScope.launch {
@@ -39,7 +44,8 @@ class UsersViewModel : ViewModel() {
                         id = doc.id,
                         nome = doc.getString("nome") ?: "",
                         email = doc.getString("email") ?: "",
-                        acesso = doc.getLong("acesso") ?: 1L
+                        acesso = doc.getLong("acesso") ?: 1L,
+                        ativo = doc.getBoolean("ativo") ?: true
                     )
                     _userBeingEdited.value = user
                 }
@@ -56,36 +62,43 @@ class UsersViewModel : ViewModel() {
     fun clearUserBeingEdited() {
         _userBeingEdited.value = null
     }
+
     fun loadUsers() {
         _isLoading.value = true
         viewModelScope.launch {
             try {
                 val snapshot = db.collection("usuarios")
-                    .orderBy("nome")
+                    .orderBy("acesso", Query.Direction.DESCENDING)  // maior acesso primeiro
                     .get()
                     .await()
 
                 val list = snapshot.documents.mapNotNull { doc ->
+                    val ativo = doc.getBoolean("ativo") // pode ser true, false ou null
+                    // Se o campo não existir ou for null → considera ativo (comportamento antigo)
+                    if (ativo == false) return@mapNotNull null // só ignora se for explicitamente false
+
                     try {
                         User(
                             id = doc.id,
-                            nome = doc.getString("nome") ?: "",
-                            email = doc.getString("email") ?: "",
-                            acesso = doc.getLong("acesso") ?: 1L
+                            nome = doc.getString("nome") ?: "Sem nome",
+                            email = doc.getString("email") ?: "sem@email.com",
+                            acesso = doc.getLong("acesso") ?: 1L,
+                            ativo = ativo ?: true // se não tiver o campo, considera true
                         )
                     } catch (e: Exception) {
                         null
                     }
                 }
+
                 _users.value = list
             } catch (e: Exception) {
-                // Em produção você pode mostrar um toast/snackbar
                 _users.value = emptyList()
             } finally {
                 _isLoading.value = false
             }
         }
     }
+
     // Adicione esta função dentro da classe UsersViewModel
     fun updateUser(
         id: String,
@@ -108,6 +121,25 @@ class UsersViewModel : ViewModel() {
                 userRef.update(updates).await()
                 onSuccess()
                 loadUsers() // recarrega a lista
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
+
+    fun deleteUser(
+        uid: String,
+        onSuccess: () -> Unit = {},
+        onError: (Exception) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                // Marca como inativo (não deleta do Auth por segurança no cliente)
+                db.collection("usuarios").document(uid)
+                    .update("ativo", false)
+                    .await()
+                loadUsers()
+                onSuccess()
             } catch (e: Exception) {
                 onError(e)
             }

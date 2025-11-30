@@ -1,4 +1,4 @@
-package com.example.tcc.telas
+package com.example.tcc.telas_adm
 
 import android.content.Intent
 import android.net.Uri
@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
@@ -66,7 +65,7 @@ fun HomeScreenAdm(
                 Spacer(Modifier.height(32.dp))
                 Column(modifier = Modifier.padding(24.dp)) {
                     Image(
-                        painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
+                        painter = painterResource(id = R.drawable.outline_bus_alert_24),
                         contentDescription = null,
                         modifier = Modifier.size(56.dp),
                         colorFilter = ColorFilter.tint(azulPrincipal)
@@ -102,7 +101,7 @@ fun HomeScreenAdm(
                     onClick = {
                         scope.launch { drawerState.close() }
                         val intent = Intent(Intent.ACTION_VIEW).apply {
-                            data = android.net.Uri.parse("https://wa.me/555592475454")
+                            data = Uri.parse("https://wa.me/555592475454")
                         }
                         context.startActivity(intent)
                     },
@@ -212,7 +211,7 @@ fun HomeScreenAdm(
                                             .height(62.dp)
                                     ) {
                                         Image(
-                                            painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
+                                            painter = painterResource(id = R.drawable.outline_bus_alert_24),
                                             contentDescription = "Ônibus",
                                             modifier = Modifier.size(28.dp),
                                             colorFilter = ColorFilter.tint(Color.White)

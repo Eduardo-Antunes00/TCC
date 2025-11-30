@@ -2,6 +2,7 @@ package com.example.tcc.telas
 
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,6 +13,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.compose.runtime.livedata.observeAsState
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.AuthState
 
@@ -35,29 +42,30 @@ fun LoginScreen(
 
     LaunchedEffect(authState) {
         when (authState) {
-            is AuthState.Loading -> mensagem = "Carregando..."
+            is AuthState.Loading -> {
+                mensagem = "Carregando..."
+            }
 
             is AuthState.Success -> {
-                val tipoAcesso = (authState as AuthState.Success).tipoAcesso
+                // FORÇA O CAST AQUI (é seguro porque já estamos no bloco "is Success")
+                val successState = authState as AuthState.Success
 
                 mensagem = "Login bem-sucedido!"
 
-                when (tipoAcesso) {
-                    2L -> navController.navigate("homeAdm") {
-                        popUpTo("login") { inclusive = true }
-                    }
-                    1L or 3L -> navController.navigate("home") {  // 1 ou qualquer outro valor
-                        popUpTo("login") { inclusive = true }
-                    }
+                val destino = if (successState.tipoAcesso == 3L) "homeAdm" else "home"
+
+                navController.navigate(destino) {
+                    popUpTo("login") { inclusive = true }
                 }
             }
 
             is AuthState.Error -> {
-                val error = authState as AuthState.Error
-                mensagem = error.message
+                // Também precisa de cast aqui
+                val errorState = authState as AuthState.Error
+                mensagem = errorState.message
             }
 
-            else -> {}
+            else -> Unit
         }
     }
     LaunchedEffect(Unit) {
@@ -82,9 +90,21 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { novoTexto ->
+                        // Converte tudo para minúscula automaticamente
+                        email = novoTexto.lowercase()
+                    },
                     label = { Text("E-mail") },
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,           // teclado de e-mail
+                        autoCorrect = false,
+                        capitalization = KeyboardCapitalization.None // ← impede maiúsculas
+                    ),
+                    visualTransformation = VisualTransformation { text ->
+                        // Garante que mesmo colando texto, ele fique em minúsculo
+                        TransformedText(AnnotatedString(text.text.lowercase()), OffsetMapping.Identity)
+                    },
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))

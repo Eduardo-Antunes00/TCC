@@ -22,4 +22,6 @@ data class User(
 
     @PropertyName("acesso")
     val acesso: Long? = null,
+    @PropertyName("ativo")
+    val ativo: Boolean? = true,
 )

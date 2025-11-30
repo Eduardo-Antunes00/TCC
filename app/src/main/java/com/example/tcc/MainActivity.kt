@@ -131,7 +131,7 @@ fun SplashWithPersistentAuth(
 
                 onResult(
                     when (acesso) {
-                        2L -> "homeAdm"
+                        3L -> "homeAdm"
                         else -> "home"  // 1 ou qualquer outro valor = usuário comum
                     }
                 )
@@ -174,7 +174,6 @@ fun SplashWithPersistentAuth(
                     Spacer(modifier = Modifier.height(48.dp))
                     CircularProgressIndicator(color = azulPrincipal, strokeWidth = 6.dp, modifier = Modifier.size(60.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Verificando autenticação...", color = azulEscuro)
                 }
             }
 
@@ -206,7 +205,7 @@ fun SplashWithPersistentAuth(
                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
                         modifier = Modifier.height(56.dp)
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null)
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.Black)
                         Spacer(Modifier.width(8.dp))
                         Text("Tentar Novamente", style = MaterialTheme.typography.titleMedium)
                     }
