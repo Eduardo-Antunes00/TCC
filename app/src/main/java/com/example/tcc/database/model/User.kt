@@ -19,4 +19,7 @@ data class User(
 
     @PropertyName("cordy")
     val cordy: Double? = null,
+
+    @PropertyName("acesso")
+    val acesso: Long? = null,
 )

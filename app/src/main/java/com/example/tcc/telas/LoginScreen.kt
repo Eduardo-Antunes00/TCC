@@ -36,16 +36,27 @@ fun LoginScreen(
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Loading -> mensagem = "Carregando..."
+
             is AuthState.Success -> {
+                val tipoAcesso = (authState as AuthState.Success).tipoAcesso
+
                 mensagem = "Login bem-sucedido!"
-                navController.navigate("home") {
-                    popUpTo("login") { inclusive = true }
+
+                when (tipoAcesso) {
+                    2L -> navController.navigate("homeAdm") {
+                        popUpTo("login") { inclusive = true }
+                    }
+                    1L or 3L -> navController.navigate("home") {  // 1 ou qualquer outro valor
+                        popUpTo("login") { inclusive = true }
+                    }
                 }
             }
+
             is AuthState.Error -> {
                 val error = authState as AuthState.Error
-                mensagem = "As credenciais estão incorretas."
+                mensagem = error.message
             }
+
             else -> {}
         }
     }

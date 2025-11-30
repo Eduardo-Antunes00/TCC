@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.rememberNavController
@@ -27,6 +28,7 @@ import com.example.tcc.ui.theme.TCCTheme
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.MapViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -72,14 +74,13 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SplashWithPersistentAuth(
     authViewModel: AuthViewModel,
-    onResult: (String) -> Unit
+    onResult: (String) -> Unit  // "login", "home" ou "homeAdm"
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Estado para controlar o que mostrar
     var isChecking by remember { mutableStateOf(true) }
-    var hasInternet by remember { mutableStateOf<Boolean?>(null) } // null = ainda verificando
+    var hasInternet by remember { mutableStateOf<Boolean?>(null) }
 
     // CORES
     val azulPrincipal = Color(0xFF0066FF)
@@ -87,27 +88,66 @@ fun SplashWithPersistentAuth(
     val azulClaro = Color(0xFF00D4FF)
     val vermelhoErro = Color(0xFFDD2C00)
 
-    // Função para verificar internet
-    fun checkInternetAndProceed() {
+    // Função principal que verifica tudo
+    fun checkAuthAndRedirect() {
         scope.launch {
             isChecking = true
-            delay(800) // pequena animação inicial
+            delay(800)
 
+            // 1. Verifica internet
             val connected = context.isInternetAvailable()
             hasInternet = connected
 
-            if (connected) {
-                delay(600) // só pra manter o splash bonito
-                val isLoggedIn = authViewModel.verifyCurrentUser()
-                onResult(if (isLoggedIn) "home" else "login")
+            if (!connected) {
+                isChecking = false
+                return@launch
             }
-            isChecking = false
+
+            // 2. Verifica se tem usuário logado e e-mail verificado
+            val user = authViewModel.checkCurrentUser()
+            if (user == null) {
+                delay(600)
+                onResult("login")
+                return@launch
+            }
+
+            // 3. Busca o campo "acesso" no Firestore
+            try {
+                val uid = user.uid
+                val doc = FirebaseFirestore.getInstance()
+                    .collection("usuarios")
+                    .document(uid)
+                    .get()
+                    .await()
+
+                if (!doc.exists()) {
+                    onResult("login")
+                    return@launch
+                }
+
+                val acesso = doc.getLong("acesso") ?: 1L
+
+                delay(600) // só pra splash ficar bonito
+
+                onResult(
+                    when (acesso) {
+                        2L -> "homeAdm"
+                        else -> "home"  // 1 ou qualquer outro valor = usuário comum
+                    }
+                )
+
+            } catch (e: Exception) {
+                // Se der erro ao buscar o documento (ex: sem internet temporária)
+                onResult("login")
+            } finally {
+                isChecking = false
+            }
         }
     }
 
     // Executa na primeira vez
     LaunchedEffect(Unit) {
-        checkInternetAndProceed()
+        checkAuthAndRedirect()
     }
 
     Box(
@@ -119,11 +159,9 @@ fun SplashWithPersistentAuth(
         contentAlignment = Alignment.Center
     ) {
         when {
-            // 1. Verificando conexão...
+            // Verificando conexão ou autenticando...
             isChecking || hasInternet == null -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Image(
                         painter = painterResource(id = R.drawable.outline_bus_alert_24),
                         contentDescription = "Ônibus Universitário",
@@ -131,62 +169,40 @@ fun SplashWithPersistentAuth(
                         colorFilter = ColorFilter.tint(azulPrincipal)
                     )
                     Spacer(modifier = Modifier.height(40.dp))
-                    Text(
-                        "Mobilidade",
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = azulPrincipal
-                    )
-                    Text(
-                        "Urbana",
-                        fontSize = 42.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = azulClaro
-                    )
+                    Text("Mobilidade", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = azulPrincipal)
+                    Text("Urbana", fontSize = 42.sp, fontWeight = FontWeight.Bold, color = azulClaro)
                     Spacer(modifier = Modifier.height(48.dp))
-                    CircularProgressIndicator(
-                        color = azulPrincipal,
-                        strokeWidth = 6.dp,
-                        modifier = Modifier.size(60.dp)
-                    )
+                    CircularProgressIndicator(color = azulPrincipal, strokeWidth = 6.dp, modifier = Modifier.size(60.dp))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Verificando conexão...", color = azulEscuro)
+                    Text("Verificando autenticação...", color = azulEscuro)
                 }
             }
 
-            // 2. Sem internet → Tela de erro
+            // Sem internet
             hasInternet == false -> {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(32.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Clear,
-                        contentDescription = null,
-                        tint = vermelhoErro,
-                        modifier = Modifier.size(80.dp)
-                    )
+                    Icon(Icons.Default.Clear, contentDescription = null, tint = vermelhoErro, modifier = Modifier.size(80.dp))
                     Spacer(modifier = Modifier.height(24.dp))
-
                     Text(
-                        text = "Sem conexão com a internet",
+                        "Sem conexão com a internet",
                         style = MaterialTheme.typography.headlineMedium,
                         color = azulEscuro,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-
                     Text(
-                        text = "Verifique sua conexão Wi-Fi ou dados móveis e tente novamente.",
+                        "Verifique sua conexão e tente novamente.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.Gray,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(32.dp))
-
                     Button(
-                        onClick = { checkInternetAndProceed() },
+                        onClick = { checkAuthAndRedirect() },
                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
                         modifier = Modifier.height(56.dp)
                     ) {

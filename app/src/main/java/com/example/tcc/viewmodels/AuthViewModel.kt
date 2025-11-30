@@ -12,13 +12,16 @@ import kotlinx.coroutines.tasks.await
 sealed class AuthState {
     object Idle : AuthState()
     object Loading : AuthState()
-    object Success : AuthState()
     object EmailVerified : AuthState()
+
+    data class Success(val tipoAcesso: Long) : AuthState()
+      // Agora carrega o valor de "acesso"
     data class Error(
         val message: String,
         val exception: Throwable? = null  // NOVO: exceção completa
     ) : AuthState()
 }
+
 
 
     class AuthViewModel : ViewModel() {
@@ -62,7 +65,7 @@ sealed class AuthState {
                     // 3. Envia e-mail de verificação
                     user.sendEmailVerification().await()
 
-                    _authState.value = AuthState.Success
+                    _authState.value = AuthState.Success(1L)
                     startEmailVerificationWatcher(user)
 
                 } catch (e: Exception) {
@@ -82,34 +85,49 @@ sealed class AuthState {
 
             viewModelScope.launch {
                 try {
+                    // 1. Faz login no Firebase Auth
                     val result = auth.signInWithEmailAndPassword(email, password).await()
-                    val user = result.user ?: throw IllegalStateException("Usuário não encontrado após login.")
+                    val user = result.user ?: throw IllegalStateException("Usuário não encontrado.")
 
                     user.reload().await()
 
-                    if (user.isEmailVerified) {
-                        _authState.value = AuthState.Success
-                    } else {
+                    // 2. Verifica se o e-mail está verificado
+                    if (!user.isEmailVerified) {
                         auth.signOut()
                         _authState.value = AuthState.Error(
                             message = "Verifique seu e-mail antes de fazer login.",
                             exception = null
                         )
+                        return@launch
                     }
+
+                    // 3. Busca o campo "acesso" no Firestore
+                    val userDoc = firestore.collection("usuarios")
+                        .document(user.uid)
+                        .get()
+                        .await()
+
+                    if (!userDoc.exists()) {
+                        auth.signOut()
+                        _authState.value = AuthState.Error("Dados do usuário não encontrados.")
+                        return@launch
+                    }
+
+                    val acesso = userDoc.getLong("acesso") ?: 1L  // padrão = 1 se não existir
+
+                    // 4. Emite sucesso + tipo de acesso
+                    _authState.value = AuthState.Success(acesso)  // já está assim no código que te mandei
+
                 } catch (e: Exception) {
                     val errorMessage = when {
                         e is com.google.firebase.auth.FirebaseAuthInvalidUserException -> {
                             "Usuário não encontrado. Verifique o e-mail."
                         }
                         e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException -> {
-                            when {
-                                e.errorCode == "ERROR_INVALID_CREDENTIAL" -> {
-                                    "As credenciais estão incorretas, malformadas ou expiradas."
-                                }
-                                e.message?.contains("password", true) == true -> {
-                                    "Senha incorreta."
-                                }
-                                else -> "Credenciais inválidas."
+                            if (e.errorCode == "ERROR_INVALID_CREDENTIAL") {
+                                "As credenciais estão incorretas, malformadas ou expiradas."
+                            } else {
+                                "Senha incorreta."
                             }
                         }
                         e is com.google.firebase.auth.FirebaseAuthException -> {
@@ -124,10 +142,7 @@ sealed class AuthState {
                         else -> e.localizedMessage ?: "Erro desconhecido."
                     }
 
-                    _authState.value = AuthState.Error(
-                        message = errorMessage,
-                        exception = e
-                    )
+                    _authState.value = AuthState.Error(errorMessage, e)
                 }
             }
         }
