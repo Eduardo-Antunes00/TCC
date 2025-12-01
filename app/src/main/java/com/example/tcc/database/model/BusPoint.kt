@@ -1,8 +1,8 @@
 package com.example.tcc.database.model
 
-data class BusPoint(
-    val id: String = "",
-    val nome: String = "",
-    val lat: Double = 0.0,
-    val long: Double = 0.0
+import org.osmdroid.util.GeoPoint
+
+data class ParadaComId(
+    val id: Int,                    // Sempre Int!
+    val ponto: GeoPoint
 )

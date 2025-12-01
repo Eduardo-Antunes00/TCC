@@ -44,7 +44,7 @@ fun HomeScreenAdm(
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
 
-    var rotas by remember { mutableStateOf<List<Route>>(emptyList()) }
+
     val polylines by mapViewModel.polylines.collectAsState()
     val isLoading by mapViewModel.isLoading.collectAsState()
 
@@ -54,12 +54,17 @@ fun HomeScreenAdm(
     val azulEscuro = Color(0xFF003366)
     val fundoDrawer = Color(0xFFF8FBFF)
 
-    LaunchedEffect (Unit) {
-        mapViewModel.carregarTrajetos()
-        rotas = pegarRotas()
+    val rotas by produceState(initialValue = emptyList<Route>()) {
+        value = pegarRotas()
+        mapViewModel.polylines.collect {
+            value = pegarRotas()  // ← recarrega a lista sempre que o mapa mudar
+        }
     }
-        //Menu
-    ModalNavigationDrawer (
+    LaunchedEffect(Unit) {
+        mapViewModel.carregarTrajetos()  // ← CARREGA O MAPA NA PRIMEIRA VEZ!
+    }
+    //Menu
+    ModalNavigationDrawer(
         drawerState = drawerState,
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
@@ -73,7 +78,11 @@ fun HomeScreenAdm(
                         colorFilter = ColorFilter.tint(azulPrincipal)
                     )
                     Spacer(Modifier.height(12.dp))
-                    Text("Onibo - ADM", style = MaterialTheme.typography.headlineSmall, color = azulEscuro)
+                    Text(
+                        "Onibo - ADM",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = azulEscuro
+                    )
                 }
                 Divider(color = azulClaro.copy(alpha = 0.3f))
 
@@ -82,7 +91,13 @@ fun HomeScreenAdm(
                     label = { Text("Perfil", color = azulEscuro) },
                     selected = false,
                     onClick = { scope.launch { drawerState.close() }; navController.navigate("profile") },
-                    icon = { Icon(Icons.Default.Person, contentDescription = null, tint = azulPrincipal) },
+                    icon = {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            tint = azulPrincipal
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -91,7 +106,13 @@ fun HomeScreenAdm(
                     label = { Text("Usuários", color = azulEscuro) },
                     selected = false,
                     onClick = { scope.launch { drawerState.close() }; navController.navigate("usersAdm") },
-                    icon = { Icon(Icons.Default.AccountCircle, contentDescription = null, tint = azulPrincipal) },
+                    icon = {
+                        Icon(
+                            Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            tint = azulPrincipal
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -107,7 +128,13 @@ fun HomeScreenAdm(
                         }
                         context.startActivity(intent)
                     },
-                    icon = { Icon(Icons.Default.Call, contentDescription = null, tint = azulPrincipal) },
+                    icon = {
+                        Icon(
+                            Icons.Default.Call,
+                            contentDescription = null,
+                            tint = azulPrincipal
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -124,7 +151,11 @@ fun HomeScreenAdm(
                 ) {
                     Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.Red)
                     Spacer(Modifier.width(12.dp))
-                    Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Sair da conta",
+                        color = Color.Red,
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }
@@ -199,6 +230,7 @@ fun HomeScreenAdm(
                                 .padding(16.dp)
                                 .heightIn(max = 170.dp)
                         ) {
+                            // Dentro do LazyColumn, onde tem os itens da rota:
                             items(rotas) { rota ->
                                 Row(
                                     modifier = Modifier
@@ -210,7 +242,7 @@ fun HomeScreenAdm(
                                     Button(
                                         onClick = { navController.navigate("route/${rota.id}") },
                                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
-                                        shape = RoundedCornerShape(50.dp),           // cápsula linda
+                                        shape = RoundedCornerShape(50.dp),
                                         contentPadding = PaddingValues(0.dp),
                                         modifier = Modifier
                                             .weight(1f)
@@ -220,18 +252,21 @@ fun HomeScreenAdm(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxSize()
                                         ) {
-                                            // Faixa colorida da linha
                                             Box(
                                                 modifier = Modifier
                                                     .width(15.dp)
                                                     .fillMaxHeight()
                                                     .background(
-                                                        color = Color(android.graphics.Color.parseColor(rota.cor)),
-                                                        shape = RoundedCornerShape(topStart = 50.dp, bottomStart = 50.dp)
+                                                        color = Color(
+                                                            android.graphics.Color.parseColor(rota.cor)
+                                                        ),
+                                                        shape = RoundedCornerShape(
+                                                            topStart = 50.dp,
+                                                            bottomStart = 50.dp
+                                                        )
                                                     )
                                             )
 
-                                            // Ícone + nome
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 modifier = Modifier
@@ -244,9 +279,7 @@ fun HomeScreenAdm(
                                                     modifier = Modifier.size(28.dp),
                                                     colorFilter = ColorFilter.tint(Color.White)
                                                 )
-
                                                 Spacer(modifier = Modifier.width(14.dp))
-
                                                 Text(
                                                     text = rota.nome,
                                                     style = MaterialTheme.typography.titleMedium,
@@ -258,7 +291,7 @@ fun HomeScreenAdm(
                                         }
                                     }
 
-                                    // ==================== BOTÃO DE EDITAR (lado direito) ====================
+                                    // ==================== BOTÃO DE EDITAR ====================
                                     IconButton(
                                         onClick = { navController.navigate("routeEditAdm/${rota.id}") },
                                         modifier = Modifier
@@ -268,37 +301,87 @@ fun HomeScreenAdm(
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Editar rota",
-                                            tint = azulPrincipal,
+                                            tint = Color.Black,
                                             modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+
+                                    // ==================== BOTÃO DE EXCLUIR (NOVO!) ====================
+                                    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+                                    IconButton(
+                                        onClick = { showDeleteConfirm = true },
+                                        modifier = Modifier.size(56.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Excluir rota",
+                                            tint = Color.Red,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                    }
+
+                                    // === DIÁLOGO DE CONFIRMAÇÃO DE EXCLUSÃO ===
+                                    if (showDeleteConfirm) {
+                                        AlertDialog(
+                                            onDismissRequest = { showDeleteConfirm = false },
+                                            title = { Text("Excluir linha?") },
+                                            text = { Text("Tem certeza que deseja excluir a rota \"${rota.nome}\"? Essa ação não pode ser desfeita.") },
+                                            confirmButton = {
+                                                TextButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            try {
+                                                                mapViewModel.excluirRota(rota.id) // ← você precisa criar esse método no ViewModel
+                                                            } catch (e: Exception) {
+                                                                // opcional: mostrar snackbar de erro
+                                                            }
+                                                            showDeleteConfirm = false
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.textButtonColors(
+                                                        contentColor = Color.Red
+                                                    )
+                                                ) {
+                                                    Text("Excluir")
+                                                }
+                                            },
+                                            dismissButton = {
+                                                TextButton(onClick = {
+                                                    showDeleteConfirm = false
+                                                }) {
+                                                    Text("Cancelar")
+                                                }
+                                            }
                                         )
                                     }
                                 }
                             }
                         }
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // BOTÃO DE ADICIONAR
+                        Button(
+                            onClick = { navController.navigate("routeEditAdm/new") },
+                            colors = ButtonDefaults.buttonColors(containerColor = azulClaro),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(56.dp),
+                            shape = MaterialTheme.shapes.large
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Adicionar nova linha",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // BOTÃO DE ADICIONAR
-                    Button(
-                        onClick = { navController.navigate("routeEditAdm/new") },
-                        colors = ButtonDefaults.buttonColors(containerColor = azulClaro),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp),
-                        shape = MaterialTheme.shapes.large
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Adicionar nova linha",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
                 }
-
-                // LOADING
                 if (isLoading) {
                     CircularProgressIndicator(
                         color = azulPrincipal,

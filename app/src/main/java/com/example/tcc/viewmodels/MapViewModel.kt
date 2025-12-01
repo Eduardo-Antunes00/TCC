@@ -27,6 +27,40 @@ class MapViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    fun excluirRota(idCampo: String) {
+        viewModelScope.launch {
+            try {
+                // 1. Busca o documento onde o campo "id" é igual ao valor passado
+                val querySnapshot = firestore.collection("rotas")
+                    .whereEqualTo("id", idCampo.toInt())  // ← aqui está o segredo!
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (querySnapshot.isEmpty) {
+                    Log.w("MapViewModel", "Rota com id $idCampo não encontrada")
+                    return@launch
+                }
+
+                // 2. Pega o ID real do documento
+                val documentId = querySnapshot.documents[0].id
+
+                // 3. Exclui o documento correto
+                firestore.collection("rotas")
+                    .document(documentId)
+                    .delete()
+                    .await()
+
+                Log.d("MapViewModel", "Rota $idCampo excluída com sucesso")
+
+                // 4. Atualiza o mapa automaticamente
+                carregarTrajetos()
+
+            } catch (e: Exception) {
+                Log.e("MapViewModel", "Erro ao excluir rota com id $idCampo", e)
+            }
+        }
+    }
 
     fun carregarTrajetos() {
         viewModelScope.launch {
@@ -97,7 +131,6 @@ class MapViewModel : ViewModel() {
 
 }
 
-
 suspend fun pegarRotas(): List<Route> {
     return try {
         val snapshot = FirebaseFirestore.getInstance()
@@ -133,4 +166,5 @@ suspend fun pegarRotas(): List<Route> {
         Log.e("ROTAS", "Erro ao carregar rotas", e)
         emptyList()
     }
+
 }

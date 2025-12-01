@@ -2,18 +2,21 @@ package com.example.tcc.viewmodels
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import com.example.tcc.database.model.ParadaComId
 import com.example.tcc.database.model.Route
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.GeoPoint
 import kotlinx.coroutines.tasks.await
+import org.osmdroid.util.GeoPoint  // IMPORT OBRIGATÓRIO
 
-class RouteViewModel: ViewModel() {
+class RouteViewModel : ViewModel() {
 
     suspend fun pegarRotaPorId(id: String): Route? {
         return try {
+            val idLong = id.toLongOrNull() ?: return null
+
             val snapshot = FirebaseFirestore.getInstance()
                 .collection("rotas")
-                .whereEqualTo("id", id.toLongOrNull())
+                .whereEqualTo("id", idLong)
                 .limit(1)
                 .get()
                 .await()
@@ -23,36 +26,34 @@ class RouteViewModel: ViewModel() {
             val doc = snapshot.documents[0]
 
             val nome = doc.getString("nome") ?: "Rota $id"
-            val cor = doc.getString("cor") ?: "#FF0000"
+            val cor = doc.getString("cor") ?: "#FF0066FF"
 
-            val pontos = (doc.get("codigo") as? List<Map<String, Any>>)
-                ?.mapNotNull { ponto ->
-                    val lat = (ponto["lat"] as? Number)?.toDouble()
-                    val lng = (ponto["lng"] as? Number)?.toDouble()
-                    if (lat != null && lng != null) {
-                        org.osmdroid.util.GeoPoint(lat, lng)
-                    } else null
-                }
-                ?.takeIf { it.size >= 2 } ?: return null
+            // Lê como List<Map<String, Any>> (o formato que você salva!)
+            val pontosRaw = doc.get("codigo") as? List<Map<String, Any>> ?: return null
 
-            Route(id, nome, cor, pontos)
+            val pontos = pontosRaw.mapNotNull { map ->
+                val lat = (map["lat"] as? Number)?.toDouble() ?: return@mapNotNull null
+                val lng = (map["lng"] as? Number)?.toDouble() ?: return@mapNotNull null
+                GeoPoint(lat, lng) // org.osmdroid.util.GeoPoint
+            }
+
+            if (pontos.size < 2) return null
+
+            Route(
+                id = idLong.toString(),
+                nome = nome,
+                cor = cor,
+                pontos = pontos // Tipo correto: List<org.osmdroid.util.GeoPoint>
+            )
         } catch (e: Exception) {
             Log.e("RouteVM", "Erro ao carregar rota ID=$id", e)
             null
         }
     }
-    // No seu RouteViewModel.kt
-    data class ParadaComId(
-        val id: String,
-        val ponto: org.osmdroid.util.GeoPoint
-    )
 
     suspend fun pegarParadasDaRota(idRota: String): List<ParadaComId> {
         return try {
-
-            val idLong = idRota.toLongOrNull() ?: run {
-                return emptyList()
-            }
+            val idLong = idRota.toLongOrNull() ?: return emptyList()
 
             val snapshot = FirebaseFirestore.getInstance()
                 .collection("rotas")
@@ -61,45 +62,25 @@ class RouteViewModel: ViewModel() {
                 .get()
                 .await()
 
-            if (snapshot.isEmpty) {
-                return emptyList()
-            }
+            if (snapshot.isEmpty) return emptyList()
 
             val doc = snapshot.documents[0]
+            val paradasRaw = doc.get("paradas") as? List<Map<String, Any>> ?: return emptyList()
 
-            val paradasRaw = doc.get("paradas") as? List<Map<String, Any>> ?: run {
-                return emptyList()
-            }
+            paradasRaw.mapNotNull { item ->
+                val idParada = (item["id"] as? Number)?.toInt() ?: return@mapNotNull null
 
-            val resultado = paradasRaw.mapNotNull { item ->
-                val idParada = item["id"] as? String
-                    ?: item["id"]?.toString() // tenta converter qualquer coisa pra string
-                    ?: return@mapNotNull null
-
-                // TENTA TODOS OS FORMATOS POSSÍVEIS
-                val lat = when (val l = item["lat"]) {
-                    is Number -> l.toDouble()
-                    is String -> l.toDoubleOrNull()
-                    else -> null
-                } ?: return@mapNotNull null
-
-                val lng = when (val l = item["lng"]) {
-                    is Number -> l.toDouble()
-                    is String -> l.toDoubleOrNull()
-                    else -> null
-                } ?: return@mapNotNull null
+                val lat = (item["lat"] as? Number)?.toDouble() ?: return@mapNotNull null
+                val lng = (item["lng"] as? Number)?.toDouble() ?: return@mapNotNull null
 
                 ParadaComId(
                     id = idParada,
-                    ponto = org.osmdroid.util.GeoPoint(lat, lng)
+                    ponto = GeoPoint(lat, lng) // org.osmdroid.util.GeoPoint
                 )
-            }
-
-            resultado
+            }.sortedBy { it.id }
         } catch (e: Exception) {
-            Log.e("RouteVM", "ERRO CRÍTICO ao carregar paradas", e)
+            Log.e("RouteVM", "Erro ao carregar paradas", e)
             emptyList()
         }
     }
 }
-

@@ -22,8 +22,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import com.example.tcc.R
 import com.example.tcc.viewmodels.RouteEditViewModel
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
@@ -47,14 +49,11 @@ fun RouteEditScreenAdm(
     var showDeleteDialog by remember { mutableStateOf<Pair<String, Int>?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    // Estado para o seletor de cor
-    // Sincroniza automaticamente com a cor atual do ViewModel
+    // Sincroniza cor com o ViewModel
     var selectedColor by remember { mutableStateOf(viewModel.corRota.value) }
     LaunchedEffect(viewModel.corRota.value) {
         selectedColor = viewModel.corRota.value
     }
-
-    val mapView = remember { mutableStateOf<MapView?>(null) }
 
     LaunchedEffect(routeId) {
         Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
@@ -85,7 +84,7 @@ fun RouteEditScreenAdm(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0066FF))
         )
 
-        // === MAPA (80% da tela) ===
+        // === MAPA (80%) ===
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -93,79 +92,81 @@ fun RouteEditScreenAdm(
                 .clipToBounds()
         ) {
             AndroidView(
-                factory = {
-                    MapView(it).apply {
+                factory = { ctx ->
+                    MapView(ctx).apply {
                         setTileSource(TileSourceFactory.MAPNIK)
                         setMultiTouchControls(true)
                         setBuiltInZoomControls(false)
                         controller.setZoom(15.0)
                         controller.setCenter(GeoPoint(-29.770881, -57.086261))
-                        mapView.value = this
 
                         val receiver = object : MapEventsReceiver {
-                            override fun singleTapConfirmedHelper(p: GeoPoint) = run {
+                            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
                                 clickedPoint = p
                                 showDialog = true
-                                true
+                                return true
                             }
-                            override fun longPressHelper(p: GeoPoint) = false
+                            override fun longPressHelper(p: GeoPoint): Boolean = false
                         }
-                        overlays.add(0, MapEventsOverlay(receiver))
+                        overlays.add(MapEventsOverlay(receiver))
                     }
                 },
                 update = { map ->
-                    viewModel.updateTrigger
+                    val eventOverlay = map.overlays.find { it is MapEventsOverlay }
                     map.overlays.clear()
+                    eventOverlay?.let { map.overlays.add(it) }
 
-                    // POLYLINE FECHADA
+                    // === ROTA (polilinha fechada visualmente) ===
                     if (viewModel.pontos.isNotEmpty()) {
-                        val points = viewModel.pontos.toMutableList().apply {
-                            if (size >= 2) add(first())
+                        val pontosParaLinha = viewModel.pontos.map { it.ponto }.toMutableList()
+                        if (pontosParaLinha.size >= 2) {
+                            pontosParaLinha.add(pontosParaLinha.first()) // fecha visualmente
                         }
+
                         map.overlays.add(Polyline().apply {
                             outlinePaint.color = android.graphics.Color.parseColor(viewModel.corRota.value)
-                            outlinePaint.strokeWidth = 12f
-                            setPoints(points)
+                            outlinePaint.strokeWidth = 14f
+                            setPoints(pontosParaLinha)
                         })
                     }
 
-                    // PONTOS DA ROTA
-                    viewModel.pontos.forEachIndexed { i, p ->
-                        map.overlays.add(Marker(map).apply {
-                            position = p
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            icon = context.getDrawable(android.R.drawable.ic_menu_mylocation)?.apply {
-                                setTint(android.graphics.Color.BLACK)
-                            }
-                            setOnMarkerClickListener { _, _ ->
-                                showDeleteDialog = Pair("ponto", i); true
-                            }
-                        })
+                    // === PONTOS DA ROTA (com número!) ===
+                    viewModel.pontos.forEachIndexed { index, pontoComId ->
+                        val isPontoDeFechamento = viewModel.pontos.size >= 2 &&
+                                index == viewModel.pontos.size - 1 &&
+                                pontoComId.ponto == viewModel.pontos.first().ponto
+
+                        if (!isPontoDeFechamento) { // não mostra marcador duplicado do fechamento
+                            map.overlays.add(Marker(map).apply {
+                                position = pontoComId.ponto
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                title = "Ponto ${pontoComId.id}"
+                                icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation)?.apply {
+                                    setTint(android.graphics.Color.BLACK)
+                                }
+                                setOnMarkerClickListener { _, _ ->
+                                    showDeleteDialog = Pair("ponto", index)
+                                    true
+                                }
+                            })
+                        }
                     }
 
-                    // PARADAS
-                    viewModel.paradas.forEachIndexed { i, parada ->
+                    // === PARADAS (com número!) ===
+                    viewModel.paradas.forEachIndexed { index, parada ->
                         map.overlays.add(Marker(map).apply {
                             position = parada.ponto
                             title = "Parada ${parada.id}"
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            icon = context.getDrawable(com.example.tcc.R.drawable.baseline_place_24)?.apply {
+                            icon = ContextCompat.getDrawable(context, R.drawable.baseline_place_24)?.apply {
                                 setTint(android.graphics.Color.RED)
                             }
                             setOnMarkerClickListener { _, _ ->
-                                showDeleteDialog = Pair("parada", i); true
+                                showDeleteDialog = Pair("parada", index)
+                                true
                             }
                         })
                     }
-
-                    // RE-ADICIONA O EVENTO DE CLIQUE
-                    val receiver = object : MapEventsReceiver {
-                        override fun singleTapConfirmedHelper(p: GeoPoint) = run {
-                            clickedPoint = p; showDialog = true; true
-                        }
-                        override fun longPressHelper(p: GeoPoint) = false
-                    }
-                    map.overlays.add(0, MapEventsOverlay(receiver))
 
                     map.invalidate()
                 },
@@ -173,7 +174,7 @@ fun RouteEditScreenAdm(
             )
         }
 
-        // === TEXTO EXPLICATIVO (20% da tela) ===
+        // === TEXTO EXPLICATIVO ===
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -183,8 +184,8 @@ fun RouteEditScreenAdm(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Toque no mapa para adicionar pontos da rota ou paradas.\n" +
-                        "Toque em um ponto/parada para excluí-lo.",
+                text = "Toque no mapa → adicionar ponto/parada\n" +
+                        "Toque em um marcador → excluir",
                 fontSize = 16.sp,
                 color = Color(0xFF003366),
                 textAlign = TextAlign.Center,
@@ -197,58 +198,78 @@ fun RouteEditScreenAdm(
     if (showDialog && clickedPoint != null) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            title = { Text("Adicionar no mapa") },
-            text = { Text("O que você deseja adicionar neste ponto?") },
+            title = { Text("Adicionar") },
+            text = { Text("O que deseja adicionar neste local?") },
             confirmButton = {
                 Row {
-                    TextButton(
-                        onClick = {
-                            viewModel.adicionarPonto(clickedPoint!!)
-                            showDialog = false
-                        }
-                    ) {
-                        Text("Ponto da Rota")
-                    }
+                    TextButton({
+                        viewModel.adicionarPonto(clickedPoint!!)
+                        showDialog = false
+                        clickedPoint = null
+                    }) { Text("Ponto da Rota") }
                     Spacer(Modifier.width(8.dp))
-                    TextButton(
-                        onClick = {
-                            viewModel.adicionarParada(clickedPoint!!)
-                            showDialog = false
-                        }
-                    ) {
-                        Text("Parada")
-                    }
+                    TextButton({
+                        viewModel.adicionarParada(clickedPoint!!)
+                        showDialog = false
+                        clickedPoint = null
+                    }) { Text("Parada") }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
+                TextButton({ showDialog = false; clickedPoint = null }) { Text("Cancelar") }
+            }
+        )
+    }
+
+    // === DIÁLOGO: Excluir ===
+    // DIÁLOGO: Excluir (mostrando o ID real do ponto/parada)
+    showDeleteDialog?.let { (tipo, index) ->
+        // Pega o ID correto com base no tipo
+        val idDoItem = when (tipo) {
+            "ponto" -> viewModel.pontos.getOrNull(index)?.id
+            "parada" -> viewModel.paradas.getOrNull(index)?.id
+            else -> null
+        }
+
+        val numero = idDoItem ?: (index + 1)  // fallback caso algo dê errado
+        val descricao = if (tipo == "ponto") "Ponto $numero" else "Parada $numero"
+
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            title = { Text("Excluir $descricao?") },
+            text = {
+                Text(
+                    text = "Você está prestes a excluir permanentemente:\n\n" +
+                            "$descricao da rota.\n\n" +
+                            "Esta ação não pode ser desfeita.",
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (tipo == "ponto") viewModel.removerPonto(index)
+                        else viewModel.removerParada(index)
+                        showDeleteDialog = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("Excluir", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) {
                     Text("Cancelar")
                 }
             }
         )
     }
 
-    // === DIÁLOGO: Excluir ===
-    showDeleteDialog?.let { (tipo, index) ->
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Excluir ${if (tipo == "ponto") "ponto" else "parada"}?") },
-            text = { Text("Esta ação não pode ser desfeita.") },
-            confirmButton = {
-                TextButton({
-                    if (tipo == "ponto") viewModel.removerPonto(index)
-                    else viewModel.removerParada(index)
-                    showDeleteDialog = null
-                }) { Text("Excluir", color = Color.Red) }
-            },
-            dismissButton = { TextButton({ showDeleteDialog = null }) { Text("Cancelar") } }
-        )
-    }
-
-    // === DIÁLOGO: Salvar com seletor de cor ===
+    // === DIÁLOGO: Salvar rota ===
     if (showSaveDialog) {
         val cores = listOf(
-            "#FF0066FF", "#FFFF0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0",
+            "#FF0066FF", "#8b0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0",
             "#FFFF5722", "#FF795548", "#FF607D8B", "#FF04F928", "#FFFFEB3B"
         )
 
@@ -264,13 +285,8 @@ fun RouteEditScreenAdm(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text("Escolha a cor da rota:", fontWeight = FontWeight.Medium)
+                    Text("Cor da linha:", fontWeight = FontWeight.Medium)
 
-
-                    val cores = listOf(
-                        "#FF0066FF", "#FFFF0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0",
-                        "#FFFF5722", "#FF795548", "#FF607D8B", "#FF04F928", "#FFFFEB3B"
-                    )
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(cores.size) { i ->
                             val corHex = cores[i]
@@ -288,18 +304,13 @@ fun RouteEditScreenAdm(
                                     )
                                     .clickable {
                                         selectedColor = corHex
-                                        viewModel.corRota.value = corHex  // atualiza o ViewModel em tempo real
+                                        viewModel.corRota.value = corHex
                                     }
                                     .padding(4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 if (isSelected) {
-                                    Icon(
-                                        Icons.Default.Done,
-                                        contentDescription = "Selecionada",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(28.dp)
-                                    )
+                                    Icon(Icons.Default.Done, contentDescription = null, tint = Color.White)
                                 }
                             }
                         }
@@ -311,12 +322,10 @@ fun RouteEditScreenAdm(
                     viewModel.corRota.value = selectedColor
                     viewModel.salvarRota(
                         onSuccess = { navController.popBackStack() },
-                        onError = { /* snackbar opcional */ }
+                        onError = { /* mostrar erro se quiser */ }
                     )
                     showSaveDialog = false
-                }) {
-                    Text("Salvar")
-                }
+                }) { Text("Salvar") }
             },
             dismissButton = {
                 TextButton({ showSaveDialog = false }) { Text("Cancelar") }
@@ -324,17 +333,10 @@ fun RouteEditScreenAdm(
         )
     }
 
+    // === LOADING ===
     if (viewModel.isLoading.value) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f)),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(
-                color = Color(0xFF0066FF),
-                strokeWidth = 6.dp
-            )
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFF0066FF), strokeWidth = 6.dp)
         }
     }
 }
