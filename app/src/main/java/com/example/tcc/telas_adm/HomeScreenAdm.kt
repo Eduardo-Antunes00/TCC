@@ -3,9 +3,11 @@ package com.example.tcc.telas_adm
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -56,7 +58,7 @@ fun HomeScreenAdm(
         mapViewModel.carregarTrajetos()
         rotas = pegarRotas()
     }
-
+        //Menu
     ModalNavigationDrawer (
         drawerState = drawerState,
         gesturesEnabled = drawerState.isOpen,
@@ -71,7 +73,7 @@ fun HomeScreenAdm(
                         colorFilter = ColorFilter.tint(azulPrincipal)
                     )
                     Spacer(Modifier.height(12.dp))
-                    Text("Mobilidade Urbana - ADM", style = MaterialTheme.typography.headlineSmall, color = azulEscuro)
+                    Text("Onibo - ADM", style = MaterialTheme.typography.headlineSmall, color = azulEscuro)
                 }
                 Divider(color = azulClaro.copy(alpha = 0.3f))
 
@@ -127,12 +129,14 @@ fun HomeScreenAdm(
             }
         }
     ) {
+
+        //Inicio da tela Principal
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            "Mobilidade Urbana - ADM",
+                            "Onibo - ADM",
                             color = Color.White,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
@@ -151,7 +155,6 @@ fun HomeScreenAdm(
             },
             containerColor = Color(0xFFF0F7FF)
         ) { paddingValues ->
-            // BOX PRINCIPAL PARA PODER USAR align()
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -167,6 +170,7 @@ fun HomeScreenAdm(
                             setTilesScaledToDpi(true)
                             controller.setZoom(13.7)
                             controller.setCenter(GeoPoint(-29.770881, -57.086261))
+                            setBuiltInZoomControls(false)
                         }
                     },
                     update = { map ->
@@ -177,7 +181,6 @@ fun HomeScreenAdm(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // === LISTA + BOTÃO DE ADICIONAR (AGORA FUNCIONA!) ===
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)  // ← Agora funciona!
@@ -194,7 +197,7 @@ fun HomeScreenAdm(
                         LazyColumn(
                             modifier = Modifier
                                 .padding(16.dp)
-                                .heightIn(max = 280.dp)
+                                .heightIn(max = 170.dp)
                         ) {
                             items(rotas) { rota ->
                                 Row(
@@ -203,37 +206,70 @@ fun HomeScreenAdm(
                                         .padding(vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // ==================== BOTÃO PRINCIPAL (com faixa colorida) ====================
                                     Button(
                                         onClick = { navController.navigate("route/${rota.id}") },
                                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
+                                        shape = RoundedCornerShape(50.dp),           // cápsula linda
+                                        contentPadding = PaddingValues(0.dp),
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(62.dp)
                                     ) {
-                                        Image(
-                                            painter = painterResource(id = R.drawable.outline_bus_alert_24),
-                                            contentDescription = "Ônibus",
-                                            modifier = Modifier.size(28.dp),
-                                            colorFilter = ColorFilter.tint(Color.White)
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Text(
-                                            text = rota.nome,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = Color.White,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxSize()
+                                        ) {
+                                            // Faixa colorida da linha
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(15.dp)
+                                                    .fillMaxHeight()
+                                                    .background(
+                                                        color = Color(android.graphics.Color.parseColor(rota.cor)),
+                                                        shape = RoundedCornerShape(topStart = 50.dp, bottomStart = 50.dp)
+                                                    )
+                                            )
+
+                                            // Ícone + nome
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .padding(horizontal = 16.dp)
+                                            ) {
+                                                Image(
+                                                    painter = painterResource(id = R.drawable.outline_bus_alert_24),
+                                                    contentDescription = "Ônibus",
+                                                    modifier = Modifier.size(28.dp),
+                                                    colorFilter = ColorFilter.tint(Color.White)
+                                                )
+
+                                                Spacer(modifier = Modifier.width(14.dp))
+
+                                                Text(
+                                                    text = rota.nome,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
                                     }
 
+                                    // ==================== BOTÃO DE EDITAR (lado direito) ====================
                                     IconButton(
                                         onClick = { navController.navigate("routeEditAdm/${rota.id}") },
-                                        modifier = Modifier.size(56.dp)
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .padding(start = 8.dp)
                                     ) {
                                         Icon(
-                                            Icons.Default.Edit,
-                                            contentDescription = "Editar",
-                                            tint = azulPrincipal
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Editar rota",
+                                            tint = azulPrincipal,
+                                            modifier = Modifier.size(26.dp)
                                         )
                                     }
                                 }

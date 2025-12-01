@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.tcc.database.model.Route
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,8 +33,10 @@ class MapViewModel : ViewModel() {
             _isLoading.value = true
             try {
                 val result = firestore.collection("rotas")
+
                     .get()
                     .await()
+
 
                 val novasLinhas = mutableListOf<Polyline>()
 
@@ -99,6 +102,7 @@ suspend fun pegarRotas(): List<Route> {
     return try {
         val snapshot = FirebaseFirestore.getInstance()
             .collection("rotas")
+            .orderBy("nome", Query.Direction.ASCENDING)
             .get()
             .await()
 

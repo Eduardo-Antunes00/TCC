@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -72,7 +73,11 @@ fun HomeScreen(
                         colorFilter = ColorFilter.tint(azulPrincipal)
                     )
                     Spacer(Modifier.height(12.dp))
-                    Text("Mobilidade Urbana", style = MaterialTheme.typography.headlineSmall, color = azulEscuro)
+                    Text(
+                        "Onibo",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = azulEscuro
+                    )
                 }
                 Divider(color = azulClaro.copy(alpha = 0.3f))
 
@@ -85,7 +90,13 @@ fun HomeScreen(
                         }
                         navController.navigate("profile") // Navega para a tela de perfil
                     },
-                    icon = { Icon(Icons.Default.Person, contentDescription = "Pessoa", tint = azulPrincipal) },
+                    icon = {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = "Pessoa",
+                            tint = azulPrincipal
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
                 val context = LocalContext.current
@@ -101,7 +112,13 @@ fun HomeScreen(
                         }
                         context.startActivity(intent)
                     },
-                    icon = { Icon(Icons.Default.Call, contentDescription = "Ouvidoria", tint = azulPrincipal) },
+                    icon = {
+                        Icon(
+                            Icons.Default.Call,
+                            contentDescription = "Ouvidoria",
+                            tint = azulPrincipal
+                        )
+                    },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
 
@@ -117,7 +134,11 @@ fun HomeScreen(
                 ) {
                     Icon(Icons.Default.ExitToApp, contentDescription = "Sair", tint = Color.Red)
                     Spacer(Modifier.width(12.dp))
-                    Text("Sair da conta", color = Color.Red, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Sair da conta",
+                        color = Color.Red,
+                        style = MaterialTheme.typography.titleMedium
+                    )
                 }
             }
         }
@@ -127,14 +148,18 @@ fun HomeScreen(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            "Mobilidade Urbana",
+                            "Onibo",
                             color = Color.White,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                     },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, tint = Color.White, contentDescription = "Menu")
+                            Icon(
+                                Icons.Default.Menu,
+                                tint = Color.White,
+                                contentDescription = "Menu"
+                            )
                         }
                     },
                     colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
@@ -153,6 +178,7 @@ fun HomeScreen(
                             setTilesScaledToDpi(true)
                             controller.setZoom(13.7)
                             controller.setCenter(GeoPoint(-29.770881, -57.086261))
+                            setBuiltInZoomControls(false)
                         }
                     },
                     update = { map ->
@@ -176,36 +202,67 @@ fun HomeScreen(
                 ) {
                     LazyColumn(
                         modifier = Modifier
-                            .padding(16.dp)
-                            .heightIn(max = 300.dp) // não cresce demais
+                            .padding(8.dp, 16.dp)
+                            .heightIn(max = 200.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(rotas) { rota ->
                             Button(
                                 onClick = { navController.navigate("route/${rota.id}") },
                                 colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
+                                shape = RoundedCornerShape(50.dp), // botão bem arredondado (cápsula)
+                                contentPadding = PaddingValues(0.dp), // importante pra gente controlar o padding interno
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
+                                    .weight(1f)
                                     .height(62.dp)
                             ) {
-                                Image(
-                                    painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
-                                    contentDescription = "Ônibus",
-                                    modifier = Modifier.size(28.dp),
-                                    colorFilter = ColorFilter.tint(Color.White)
-                                )
-                                Spacer(Modifier.width(16.dp))
-                                Text(
-                                    text = rota.nome,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    // FAIXA COLORIDA (lado esquerdo)
+                                    Box(
+                                        modifier = Modifier
+                                            .width(15.dp)
+                                            .fillMaxHeight()
+                                            .background(
+                                                color = Color(android.graphics.Color.parseColor(rota.cor)),
+                                                shape = RoundedCornerShape(topStart = 50.dp, bottomStart = 50.dp)
+                                            )
+                                    )
+
+                                    // ÍCONE + TEXTO (com espaçamento perfeito)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 16.dp)
+                                    ) {
+                                        Image(
+                                            painter = painterResource(id = com.example.tcc.R.drawable.outline_bus_alert_24),
+                                            contentDescription = "Ônibus",
+                                            modifier = Modifier.size(28.dp),
+                                            colorFilter = ColorFilter.tint(Color.White)
+                                        )
+
+                                        Spacer(modifier = Modifier.width(14.dp))
+
+                                        Text(
+                                            text = rota.nome,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                }
                             }
                         }
                     }
                 }
+
 
                 // === LOADING ===
                 if (isLoading) {

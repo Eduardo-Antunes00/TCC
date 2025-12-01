@@ -74,6 +74,7 @@ fun RouteScreen(
                     setMultiTouchControls(true)
                     setTilesScaledToDpi(true)
                     controller.setZoom(14.0)
+                    setBuiltInZoomControls(false)
                 }
             },
             update = { map ->
@@ -103,11 +104,11 @@ fun RouteScreen(
 
                         // Usa seu outline_bus_alert_24 como pin (azul ou vermelho se selecionado)
                         val tintColor = if (parada.id == paradaSelecionada)
-                            android.graphics.Color.parseColor("#00FF00") // MUDAR PARA VERDEEEEEEEEEEEEEEEEEEEEEEE
+                            android.graphics.Color.parseColor("#00FF00") // VERDEEEEEEEEEEEEEEEEEEEEEEE
                         else
-                            android.graphics.Color.parseColor("#0066FF") // azul quando selecionado
+                            android.graphics.Color.parseColor("#FF0000") // vermelho
 
-                        icon = ContextCompat.getDrawable(context, com.example.tcc.R.drawable.outline_pin_drop_24)?.apply {
+                        icon = ContextCompat.getDrawable(context, com.example.tcc.R.drawable.baseline_place_24)?.apply {
                             setTint(tintColor)
                             setBounds(0, 0, intrinsicWidth, intrinsicHeight)
                         }
