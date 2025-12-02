@@ -182,8 +182,39 @@ fun HomeScreen(
                         }
                     },
                     update = { map ->
+                        // Remove apenas as polylines antigas
                         map.overlays.removeAll { it is Polyline }
-                        polylines.forEach { map.overlays.add(it) }
+
+                        // Agora usa as ROTAS completas (que têm a cor!) para criar as linhas
+                        rotas.forEach { rota ->
+                            val points = rota.pontos  // assumindo que Route tem 'pontos: List<GeoPoint>'
+                            if (points.size < 2) return@forEach
+
+                            // 1. LINHA DE FUNDO BRANCA (grossa e arredondada)
+                            val backgroundLine = Polyline().apply {
+                                outlinePaint.color = android.graphics.Color.BLACK
+                                outlinePaint.strokeWidth = 12f
+                                outlinePaint.isAntiAlias = true
+                                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                setPoints(points)
+                            }
+
+                            // 2. LINHA COLORIDA POR CIMA (fina e perfeita)
+                            val foregroundLine = Polyline().apply {
+                                outlinePaint.color = android.graphics.Color.parseColor(rota.cor)  // ← AQUI USAMOS rota.cor!
+                                outlinePaint.strokeWidth = 8f
+                                outlinePaint.isAntiAlias = true
+                                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                setPoints(points)
+                            }
+
+                            // Adiciona na ordem certa: fundo primeiro, cor depois
+                            map.overlays.add(backgroundLine)
+                            map.overlays.add(foregroundLine)
+                        }
+
                         map.invalidate()
                     },
                     modifier = Modifier.fillMaxSize()

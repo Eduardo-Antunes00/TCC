@@ -2,6 +2,7 @@ package com.example.tcc.viewmodels
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import com.example.tcc.database.model.OnibusInfo
 import com.example.tcc.database.model.ParadaComId
 import com.example.tcc.database.model.Route
 import com.google.firebase.firestore.FirebaseFirestore
@@ -80,6 +81,46 @@ class RouteViewModel : ViewModel() {
             }.sortedBy { it.id }
         } catch (e: Exception) {
             Log.e("RouteVM", "Erro ao carregar paradas", e)
+            emptyList()
+        }
+    }
+    // ============ NOVO: BUSCAR ÔNIBUS EM TEMPO REAL ============
+    // ============ CORRIGIDO: BUSCAR ÔNIBUS EM TEMPO REAL ============
+    // VERSÃO FINAL: RETORNA TODOS OS ÔNIBUS DA ROTA COM SEU STATUS
+    suspend fun pegarOnibusDaRota(routeNumero: String): List<OnibusInfo> {
+        return try {
+            Log.d("RouteVM", "Buscando todos os ônibus da rota: $routeNumero")
+
+            val rotaSnapshot = FirebaseFirestore.getInstance()
+                .collection("rotas")
+                .whereEqualTo("id", routeNumero.toLongOrNull() ?: return emptyList())
+                .limit(1)
+                .get()
+                .await()
+
+            if (rotaSnapshot.isEmpty) return emptyList()
+
+            val rotaDocId = rotaSnapshot.documents[0].id
+
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("onibus")
+                .whereEqualTo("rotaCodigo", rotaDocId)
+                .get()
+                .await()
+
+            snapshot.documents.mapNotNull { doc ->
+                val lat = doc.getDouble("lat") ?: return@mapNotNull null
+                val lng = doc.getDouble("lng") ?: return@mapNotNull null
+                val status = doc.getString("status") ?: "Desconhecido"
+
+                OnibusInfo(
+                    position = GeoPoint(lat, lng),
+                    status = status,
+                    documentId = doc.id
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("RouteVM", "Erro ao buscar ônibus", e)
             emptyList()
         }
     }

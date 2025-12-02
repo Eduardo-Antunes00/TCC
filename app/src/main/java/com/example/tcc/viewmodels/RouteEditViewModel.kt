@@ -107,7 +107,20 @@ class RouteEditViewModel : ViewModel() {
             }
         }
     }
+//================ Mover Parada/Ponto =======================
+    fun moverPonto(index: Int, novoPonto: GeoPoint) {
+        if (index in _pontos.indices) {
+            _pontos[index] = _pontos[index].copy(ponto = novoPonto)
+            renumerarPontos()
+        }
+    }
 
+    fun moverParada(index: Int, novoPonto: GeoPoint) {
+        if (index in _paradas.indices) {
+            _paradas[index] = _paradas[index].copy(ponto = novoPonto)
+            renumerarParadas()
+        }
+    }
     // ============ ADICIONAR PONTO ============
     fun adicionarPonto(point: GeoPoint) {
         val novoId = if (_pontos.isEmpty()) 1 else _pontos.maxOf { it.id } + 1

@@ -193,6 +193,7 @@ fun HomeScreenAdm(
             ) {
 
                 // === MAPA EM TELA CHEIA ===
+                // === MAPA EM TELA CHEIA ===
                 AndroidView(
                     factory = { ctx ->
                         MapView(ctx).apply {
@@ -205,8 +206,38 @@ fun HomeScreenAdm(
                         }
                     },
                     update = { map ->
+                        // Remove apenas as polylines antigas
                         map.overlays.removeAll { it is Polyline }
-                        polylines.forEach { map.overlays.add(it) }
+
+                        // Usa as ROTAS completas (que têm .pontos e .cor)
+                        rotas.forEach { rota ->
+                            val points = rota.pontos
+                            if (points.size < 2) return@forEach
+
+                            // 1. LINHA DE FUNDO BRANCA (grossinha com glow)
+                            val backgroundLine = Polyline().apply {
+                                outlinePaint.color = android.graphics.Color.BLACK
+                                outlinePaint.strokeWidth = 12f
+                                outlinePaint.isAntiAlias = true
+                                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                setPoints(points)
+                            }
+
+                            // 2. LINHA COLORIDA POR CIMA (perfeita e vibrante)
+                            val foregroundLine = Polyline().apply {
+                                outlinePaint.color = android.graphics.Color.parseColor(rota.cor)
+                                outlinePaint.strokeWidth = 8f
+                                outlinePaint.isAntiAlias = true
+                                outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                setPoints(points)
+                            }
+
+                            map.overlays.add(backgroundLine)
+                            map.overlays.add(foregroundLine)
+                        }
+
                         map.invalidate()
                     },
                     modifier = Modifier.fillMaxSize()

@@ -44,17 +44,19 @@ fun RouteEditScreenAdm(
     viewModel: RouteEditViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    var showDialog by remember { mutableStateOf(false) }
+
+    // Estados de UI
+    var showAddDialog by remember { mutableStateOf(false) }
     var clickedPoint by remember { mutableStateOf<GeoPoint?>(null) }
-    var showDeleteDialog by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    var showActionDialog by remember { mutableStateOf<Pair<String, Int>?>(null) } // "ponto" ou "parada", índice
+    var modoMover by remember { mutableStateOf<Pair<String, Int>?>(null) }        // null = normal, senão = movendo
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    // Sincroniza cor com o ViewModel
+    // Cor sincronizada
     var selectedColor by remember { mutableStateOf(viewModel.corRota.value) }
-    LaunchedEffect(viewModel.corRota.value) {
-        selectedColor = viewModel.corRota.value
-    }
+    LaunchedEffect(viewModel.corRota.value) { selectedColor = viewModel.corRota.value }
 
+    // Inicializa configuração do osmdroid
     LaunchedEffect(routeId) {
         Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
         viewModel.init(routeId)
@@ -84,7 +86,7 @@ fun RouteEditScreenAdm(
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0066FF))
         )
 
-        // === MAPA (80%) ===
+        // === MAPA ===
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -103,9 +105,22 @@ fun RouteEditScreenAdm(
                         val receiver = object : MapEventsReceiver {
                             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
                                 clickedPoint = p
-                                showDialog = true
+
+                                if (modoMover != null) {
+                                    // Está no modo mover → reposiciona imediatamente
+                                    val (tipo, index) = modoMover!!
+                                    if (tipo == "ponto") {
+                                        viewModel.moverPonto(index, p)
+                                    } else {
+                                        viewModel.moverParada(index, p)
+                                    }
+                                    modoMover = null
+                                } else {
+                                    showAddDialog = true
+                                }
                                 return true
                             }
+
                             override fun longPressHelper(p: GeoPoint): Boolean = false
                         }
                         overlays.add(MapEventsOverlay(receiver))
@@ -116,43 +131,41 @@ fun RouteEditScreenAdm(
                     map.overlays.clear()
                     eventOverlay?.let { map.overlays.add(it) }
 
-                    // === ROTA (polilinha fechada visualmente) ===
+                    // === LINHA DA ROTA ===
                     if (viewModel.pontos.isNotEmpty()) {
-                        val pontosParaLinha = viewModel.pontos.map { it.ponto }.toMutableList()
-                        if (pontosParaLinha.size >= 2) {
-                            pontosParaLinha.add(pontosParaLinha.first()) // fecha visualmente
-                        }
+                        val linha = viewModel.pontos.map { it.ponto }.toMutableList()
+                        if (linha.size >= 2) linha.add(linha.first())
 
                         map.overlays.add(Polyline().apply {
                             outlinePaint.color = android.graphics.Color.parseColor(viewModel.corRota.value)
                             outlinePaint.strokeWidth = 14f
-                            setPoints(pontosParaLinha)
+                            setPoints(linha)
                         })
                     }
 
-                    // === PONTOS DA ROTA (com número!) ===
-                    viewModel.pontos.forEachIndexed { index, pontoComId ->
-                        val isPontoDeFechamento = viewModel.pontos.size >= 2 &&
+                    // === PONTOS DA ROTA ===
+                    viewModel.pontos.forEachIndexed { index, p ->
+                        val isFechamento = viewModel.pontos.size >= 2 &&
                                 index == viewModel.pontos.size - 1 &&
-                                pontoComId.ponto == viewModel.pontos.first().ponto
+                                p.ponto == viewModel.pontos.first().ponto
 
-                        if (!isPontoDeFechamento) { // não mostra marcador duplicado do fechamento
+                        if (!isFechamento) {
                             map.overlays.add(Marker(map).apply {
-                                position = pontoComId.ponto
+                                position = p.ponto
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                title = "Ponto ${pontoComId.id}"
+                                title = "Ponto ${p.id}"
                                 icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation)?.apply {
                                     setTint(android.graphics.Color.BLACK)
                                 }
                                 setOnMarkerClickListener { _, _ ->
-                                    showDeleteDialog = Pair("ponto", index)
+                                    showActionDialog = Pair("ponto", index)
                                     true
                                 }
                             })
                         }
                     }
 
-                    // === PARADAS (com número!) ===
+                    // === PARADAS ===
                     viewModel.paradas.forEachIndexed { index, parada ->
                         map.overlays.add(Marker(map).apply {
                             position = parada.ponto
@@ -162,7 +175,7 @@ fun RouteEditScreenAdm(
                                 setTint(android.graphics.Color.RED)
                             }
                             setOnMarkerClickListener { _, _ ->
-                                showDeleteDialog = Pair("parada", index)
+                                showActionDialog = Pair("parada", index)
                                 true
                             }
                         })
@@ -174,102 +187,96 @@ fun RouteEditScreenAdm(
             )
         }
 
-        // === TEXTO EXPLICATIVO ===
+        // === MENSAGEM INFERIOR ===
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(0.2f)
-                .background(Color(0xFFF5F5F5))
+                .background(if (modoMover != null) Color(0xFF0066FF) else Color(0xFFF5F5F5))
                 .padding(16.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "Toque no mapa → adicionar ponto/parada\n" +
-                        "Toque em um marcador → excluir",
+                text = when {
+                    modoMover != null -> {
+                        val (tipo, index) = modoMover!!
+                        val id = if (tipo == "ponto") viewModel.pontos.getOrNull(index)?.id
+                        else viewModel.paradas.getOrNull(index)?.id
+                        "Toque no mapa para reposicionar a ${if (tipo == "ponto") "Ponto" else "Parada"} $id"
+                    }
+                    else -> "Toque no mapa → adicionar ponto/parada\nToque em um marcador → mover ou excluir"
+                },
                 fontSize = 16.sp,
-                color = Color(0xFF003366),
+                color = if (modoMover != null) Color.White else Color(0xFF003366),
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium
             )
         }
     }
 
-    // === DIÁLOGO: Adicionar ponto ou parada ===
-    if (showDialog && clickedPoint != null) {
+    // === DIÁLOGO: Adicionar novo ponto/parada ===
+    if (showAddDialog && clickedPoint != null) {
         AlertDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { showAddDialog = false },
             title = { Text("Adicionar") },
             text = { Text("O que deseja adicionar neste local?") },
             confirmButton = {
                 Row {
                     TextButton({
                         viewModel.adicionarPonto(clickedPoint!!)
-                        showDialog = false
+                        showAddDialog = false
                         clickedPoint = null
                     }) { Text("Ponto da Rota") }
                     Spacer(Modifier.width(8.dp))
                     TextButton({
                         viewModel.adicionarParada(clickedPoint!!)
-                        showDialog = false
+                        showAddDialog = false
                         clickedPoint = null
                     }) { Text("Parada") }
                 }
             },
             dismissButton = {
-                TextButton({ showDialog = false; clickedPoint = null }) { Text("Cancelar") }
+                TextButton({ showAddDialog = false; clickedPoint = null }) { Text("Cancelar") }
             }
         )
     }
 
-    // === DIÁLOGO: Excluir ===
-    // DIÁLOGO: Excluir (mostrando o ID real do ponto/parada)
-    showDeleteDialog?.let { (tipo, index) ->
-        // Pega o ID correto com base no tipo
-        val idDoItem = when (tipo) {
-            "ponto" -> viewModel.pontos.getOrNull(index)?.id
-            "parada" -> viewModel.paradas.getOrNull(index)?.id
-            else -> null
-        }
-
-        val numero = idDoItem ?: (index + 1)  // fallback caso algo dê errado
-        val descricao = if (tipo == "ponto") "Ponto $numero" else "Parada $numero"
+    // === DIÁLOGO: Ações (Mover ou Excluir) ===
+    showActionDialog?.let { (tipo, index) ->
+        val id = if (tipo == "ponto") viewModel.pontos.getOrNull(index)?.id
+        else viewModel.paradas.getOrNull(index)?.id ?: "?"
 
         AlertDialog(
-            onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Excluir $descricao?") },
-            text = {
-                Text(
-                    text = "Você está prestes a excluir permanentemente:\n\n" +
-                            "$descricao da rota.\n\n" +
-                            "Esta ação não pode ser desfeita.",
-                    textAlign = TextAlign.Center,
-                    fontWeight = FontWeight.Medium
-                )
-            },
+            onDismissRequest = { showActionDialog = null },
+            title = { Text("${if (tipo == "ponto") "Ponto" else "Parada"} $id")},
+            text = { Text("O que deseja fazer?") },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                Column {
+                    TextButton({
+                        modoMover = Pair(tipo, index)
+                        showActionDialog = null
+                    }) {
+                        Text("Mover", color = Color(0xFF0066FF), fontWeight = FontWeight.Bold)
+                    }
+                    TextButton({
                         if (tipo == "ponto") viewModel.removerPonto(index)
                         else viewModel.removerParada(index)
-                        showDeleteDialog = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
-                ) {
-                    Text("Excluir", fontWeight = FontWeight.Bold)
+                        showActionDialog = null
+                    }) {
+                        Text("Excluir", color = Color.Red)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("Cancelar")
-                }
+                TextButton({ showActionDialog = null }) { Text("Cancelar") }
             }
         )
     }
 
-    // === DIÁLOGO: Salvar rota ===
+    // === DIÁLOGO: Salvar ===
     if (showSaveDialog) {
         val cores = listOf(
-            "#FF0066FF", "#8b0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0",
+            "#FF0066FF", "#FFFF0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0",
             "#FFFF5722", "#FF795548", "#FF607D8B", "#FF04F928", "#FFFFEB3B"
         )
 
@@ -284,15 +291,12 @@ fun RouteEditScreenAdm(
                         label = { Text("Nome da rota") },
                         modifier = Modifier.fillMaxWidth()
                     )
-
                     Text("Cor da linha:", fontWeight = FontWeight.Medium)
-
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(cores.size) { i ->
                             val corHex = cores[i]
                             val cor = Color(android.graphics.Color.parseColor(corHex))
                             val isSelected = selectedColor == corHex
-
                             Box(
                                 modifier = Modifier
                                     .size(52.dp)
@@ -309,9 +313,7 @@ fun RouteEditScreenAdm(
                                     .padding(4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (isSelected) {
-                                    Icon(Icons.Default.Done, contentDescription = null, tint = Color.White)
-                                }
+                                if (isSelected) Icon(Icons.Default.Done, contentDescription = null, tint = Color.White)
                             }
                         }
                     }
@@ -322,14 +324,12 @@ fun RouteEditScreenAdm(
                     viewModel.corRota.value = selectedColor
                     viewModel.salvarRota(
                         onSuccess = { navController.popBackStack() },
-                        onError = { /* mostrar erro se quiser */ }
+                        onError = { }
                     )
                     showSaveDialog = false
                 }) { Text("Salvar") }
             },
-            dismissButton = {
-                TextButton({ showSaveDialog = false }) { Text("Cancelar") }
-            }
+            dismissButton = { TextButton({ showSaveDialog = false }) { Text("Cancelar") } }
         )
     }
 
