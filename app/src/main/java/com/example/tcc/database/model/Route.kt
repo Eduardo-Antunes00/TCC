@@ -7,5 +7,6 @@ data class Route(
     val id: String = "",
     val nome: String = "",
     val cor: String = "",
-    val pontos: List<GeoPoint> = emptyList()
+    val pontos: List<GeoPoint> = emptyList(),
+    val horarios: Map<String, String> = emptyMap()
 )

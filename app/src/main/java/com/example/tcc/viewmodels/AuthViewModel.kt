@@ -33,7 +33,6 @@ sealed class AuthState {
 
         private var verificationJob: Job? = null
         private val viewModelScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-
         // ================================
         // REGISTRO
         // ================================
@@ -217,16 +216,36 @@ sealed class AuthState {
         fun checkCurrentUser(): FirebaseUser? {
             return auth.currentUser?.takeIf { it.isEmailVerified }
         }
+        // ================================
+         //Recuperar Senha
+         //================================// ================================
+        fun recuperarSenha(email: String, onResult: (Boolean, String) -> Unit) {
+            if (email.isBlank()) {
+                onResult(false, "Digite seu e-mail.")
+                return
+            }
 
-        // Força reload pra garantir que o email foi verificado
-        suspend fun verifyCurrentUser(): Boolean {
-            return try {
-                val user = auth.currentUser ?: return false
-                user.reload().await()
-                user.isEmailVerified
-            } catch (e: Exception) {
-                false
+            // Removido: _authState.value = AuthState.Loading  ← não mexer no estado global!
+
+            viewModelScope.launch {
+                try {
+                    auth.sendPasswordResetEmail(email).await()
+                    // Não mexemos no _authState aqui
+                    onResult(true, "E-mail de recuperação enviado! Verifique sua caixa de entrada (e spam).")
+                } catch (e: Exception) {
+                    val mensagem = when {
+                        e.message?.contains("no user record", true) == true ->
+                            "Este e-mail não está cadastrado."
+                        e.message?.contains("badly formatted", true) == true ->
+                            "E-mail inválido."
+                        e.message?.contains("network", true) == true ->
+                            "Sem conexão com a internet."
+                        else -> "Erro ao enviar e-mail. Tente novamente."
+                    }
+                    onResult(false, mensagem)
+                }
             }
         }
     }
+
 

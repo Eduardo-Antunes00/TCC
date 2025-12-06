@@ -1,23 +1,25 @@
 package com.example.tcc.telas
 
-
 import android.graphics.Bitmap
-import androidx.core.graphics.drawable.toBitmap
-
-
-import android.graphics.Color.parseColor
-import android.graphics.drawable.BitmapDrawable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +44,6 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import androidx.core.graphics.toColorInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,12 +60,11 @@ fun RouteScreen(
     var selectedItem by remember { mutableStateOf("Selecione uma Parada/Ônibus") }
     var isLoading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf(false) }
+    var firstLoad by remember { mutableStateOf(true) }
+    var showHorarios by remember { mutableStateOf(false) }
 
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
-
-    // Chave para forçar o zoom apenas na primeira carga
-    var firstLoad by remember { mutableStateOf(true) }
 
     LaunchedEffect(routeId) {
         while (true) {
@@ -83,140 +83,280 @@ fun RouteScreen(
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val mapHeight = maxHeight * 0.8f
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = route?.nome ?: "Linha",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showHorarios = !showHorarios }) {
+                        Icon(
+                            painter = painterResource(R.drawable.outline_calendar_clock_24),
+                            contentDescription = "Ver horários",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
+            )
+        },
+        containerColor = Color(0xFFF0F7FF)
+    ) { paddingValues ->
 
-        AndroidView(
-            factory = { ctx ->
-                MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
-                    setTilesScaledToDpi(true)
-                    controller.setZoom(14.0)
-                    setBuiltInZoomControls(false)
+        Box(modifier = Modifier.padding(paddingValues)) {
 
-                    // Listener para clique no mapa (fora de marcadores)
-                    setOnTouchListener { _, event ->
-                        if (event.action == android.view.MotionEvent.ACTION_UP) {
-                            selectedItem = "Selecione uma Parada/Ônibus"
-                        }
-                        false
+            Column(modifier = Modifier.fillMaxSize()) {
+
+                // === MAPA - 80% DA TELA ===
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.8f)
+                        .clipToBounds()
+                ) {
+                    AndroidView(
+                        factory = { ctx ->
+                            MapView(ctx).apply {
+                                setTileSource(TileSourceFactory.MAPNIK)
+                                setMultiTouchControls(true)
+                                setTilesScaledToDpi(true)
+                                controller.setZoom(14.0)
+                                setBuiltInZoomControls(false)
+
+                                setOnTouchListener { _, event ->
+                                    if (event.action == android.view.MotionEvent.ACTION_UP) {
+                                        selectedItem = "Selecione uma Parada/Ônibus"
+                                    }
+                                    false
+                                }
+                            }
+                        },
+                        update = { map ->
+                            map.overlays.clear()
+
+                            route?.let { r ->
+                                val points = r.pontos.toMutableList()
+                                if (points.size >= 2 && points.last() != points.first()) {
+                                    points.add(points.first())
+                                }
+
+                                val backgroundLine = Polyline().apply {
+                                    outlinePaint.color = android.graphics.Color.BLACK
+                                    outlinePaint.strokeWidth = 12f
+                                    outlinePaint.isAntiAlias = true
+                                    outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                    outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                    setPoints(points)
+                                }
+
+                                val foregroundLine = Polyline().apply {
+                                    outlinePaint.color = android.graphics.Color.parseColor(r.cor)
+                                    outlinePaint.strokeWidth = 8f
+                                    outlinePaint.isAntiAlias = true
+                                    outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                                    outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                                    setPoints(points)
+                                }
+
+                                map.overlays.add(backgroundLine)
+                                map.overlays.add(foregroundLine)
+
+                                if (firstLoad) {
+                                    foregroundLine.bounds?.let { bounds ->
+                                        map.zoomToBoundingBox(bounds, true, 100)
+                                        map.controller.setCenter(bounds.centerWithDateLine)
+                                    }
+                                    firstLoad = false
+                                }
+                            }
+
+                            // PARADAS
+                            paradas.forEach { parada ->
+                                Marker(map).apply {
+                                    position = parada.ponto
+                                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                    icon = ContextCompat.getDrawable(context, R.drawable.baseline_place_24)?.apply {
+                                        setTint(android.graphics.Color.parseColor("#FF1744"))
+                                    }
+                                    title = "Parada ${parada.id}"
+                                    setOnMarkerClickListener { _, _ ->
+                                        selectedItem = "Parada ${parada.id}"
+                                        map.controller.animateTo(parada.ponto, 17.0, 600L)
+                                        true
+                                    }
+                                    map.overlays.add(this)
+                                }
+                            }
+
+                            // ÔNIBUS
+                            onibusList.forEach { onibus ->
+                                val corInt = when (onibus.status) {
+                                    "Em operação"     -> 0xFF0066FF.toInt()
+                                    "Parado"          -> 0xFFD50000.toInt()
+                                    "Manutenção"      -> 0xFF9C27B0.toInt()
+                                    "Fora de Serviço" -> 0xFFFF9800.toInt()
+                                    else              -> 0xFF757575.toInt()
+                                }
+
+                                val tamanhoPx = 32
+                                val bitmap = Bitmap.createBitmap(tamanhoPx, tamanhoPx, Bitmap.Config.ARGB_8888)
+                                val canvas = android.graphics.Canvas(bitmap)
+                                val drawable = ContextCompat.getDrawable(context, R.drawable.outline_bus_alert_24)!!
+                                    .mutate()
+                                drawable.setTint(corInt)
+                                drawable.setBounds(0, 0, tamanhoPx, tamanhoPx)
+                                drawable.draw(canvas)
+
+                                Marker(map).apply {
+                                    position = onibus.position
+                                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                    title = "Ônibus - ${onibus.status}"
+                                    icon = android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+                                    setOnMarkerClickListener { _, _ ->
+                                        selectedItem = "Ônibus: ${onibus.status}"
+                                        map.controller.animateTo(onibus.position, 17.0, 600L)
+                                        true
+                                    }
+                                    map.overlays.add(this)
+                                }
+                            }
+
+                            map.invalidate()
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                // === PARTE DE BAIXO - 20% (BRANCO PURO) ===
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.2f)
+                        .background(Color.White)
+                        .padding(20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Image(
+                            painter = painterResource(R.drawable.outline_bus_alert_24),
+                            contentDescription = "Ônibus",
+                            modifier = Modifier.size(56.dp),
+                            colorFilter = ColorFilter.tint(azulPrincipal)
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            text = selectedItem,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = azulPrincipal,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
-            },
-            update = { map ->
-                map.overlays.clear()
+            }
 
-                // ROTA
-                route?.let { r: Route ->
-                    val points = r.pontos.toMutableList()
-                    if (points.size >= 2 && points.last() != points.first()) {
-                        points.add(points.first())
-                    }
+            // === CARD DE HORÁRIOS NA PARTE DE BAIXO (FLUTUANTE) ===
+            AnimatedVisibility(
+                visible = showHorarios,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .navigationBarsPadding(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(24.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
 
-                    // 1. LINHA DE FUNDO BRANCA (grossa e arredondada)
-                    val backgroundLine = Polyline().apply {
-                        outlinePaint.color = android.graphics.Color.BLACK
-                        outlinePaint.strokeWidth = 12f
-                        outlinePaint.isAntiAlias = true
-                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                        setPoints(points)
-                    }
-
-                    // 2. LINHA COLORIDA POR CIMA (fina e perfeita)
-                    val foregroundLine = Polyline().apply {
-                        outlinePaint.color = android.graphics.Color.parseColor(r.cor)
-                        outlinePaint.strokeWidth = 8f
-                        outlinePaint.isAntiAlias = true
-                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                        setPoints(points)
-                    }
-
-                    map.overlays.add(backgroundLine)
-                    map.overlays.add(foregroundLine)
-
-                    if (firstLoad) {
-                        foregroundLine.bounds?.let { bounds ->
-                            map.zoomToBoundingBox(bounds, true, 100)
-                            map.controller.setCenter(bounds.centerWithDateLine)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_calendar_clock_24),
+                                contentDescription = null,
+                                tint = azulPrincipal,
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "Horários da Rota",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp,
+                                color = azulEscuro
+                            )
+                            Spacer(Modifier.weight(1f))
+                            IconButton(onClick = { showHorarios = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Fechar", tint = Color.Gray)
+                            }
                         }
-                        firstLoad = false
+
+                        HorizontalDivider(color = Color.LightGray.copy(0.5f))
+
+                        val dias = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
+                        val horariosMap = route?.horarios ?: emptyMap()
+
+                        if (horariosMap.isEmpty()) {
+                            Text(
+                                "Nenhum horário cadastrado",
+                                color = Color.Gray,
+                                fontSize = 16.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                modifier = Modifier.padding(vertical = 24.dp).fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+                            ) {
+                                items(dias) { dia ->
+                                    val horario = horariosMap[dia]
+                                    if (!horario.isNullOrBlank()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(dia, fontWeight = FontWeight.Medium, fontSize = 17.sp)
+                                            Text(horario, color = azulEscuro, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+                                        }
+                                    }
+                                }
+
+                                val fechado = dias.filter { horariosMap[it].isNullOrBlank() }
+                                if (fechado.isNotEmpty()) {
+                                    item {
+                                        Spacer(Modifier.height(8.dp))
+                                        Text(
+                                            "Fechado: ${fechado.joinToString(", ")}",
+                                            color = Color.Red.copy(0.9f),
+                                            fontSize = 15.sp,
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        }
 
-                // PARADAS
-                paradas.forEach { parada ->
-                    val marker = Marker(map).apply {
-                        position = parada.ponto
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        icon = ContextCompat.getDrawable(context, R.drawable.baseline_place_24)?.apply {
-                            setTint(parseColor("#FF1744"))
-                        }
-                        title = "Parada ${parada.id}"
-                        setOnMarkerClickListener { _, _ ->
-                            selectedItem = "Parada ${parada.id}"
-                            map.controller.animateTo(parada.ponto, 17.0, 600L)
-                            true
-                        }
-                    }
-                    map.overlays.add(marker)
-                }
-
-                // ÔNIBUS – ícone menor!
-                // Substitua TODO o bloco dos ÔNIBUS por esse aqui:
-
-                onibusList.forEach { onibus ->
-                    val corInt = when (onibus.status) {
-                        "Em operação"     -> 0xFF0066FF.toInt()
-                        "Parado"          -> 0xFFD50000.toInt()
-                        "Manutenção"      -> 0xFF9C27B0.toInt()
-                        "Fora de Serviço" -> 0xFFFF9800.toInt()
-                        else              -> 0xFF757575.toInt()
-                    }
-
-                    val tamanhoPx = 32
-
-                    // CRIA O BITMAP EM BRANCO
-                    val bitmap = Bitmap.createBitmap(tamanhoPx, tamanhoPx, Bitmap.Config.ARGB_8888)
-
-                    // USA O Canvas DO ANDROID (não do Compose!)
-                    val canvas = android.graphics.Canvas(bitmap)
-
-                    // Pega o drawable, aplica cor e desenha
-                    val drawable = ContextCompat.getDrawable(context, R.drawable.outline_bus_alert_24)!!
-                        .mutate()  // importante!
-
-                    drawable.setTint(corInt)
-                    drawable.setBounds(0, 0, tamanhoPx, tamanhoPx)
-                    drawable.draw(canvas)  // ← aqui a cor é aplicada de verdade
-
-                    val marker = Marker(map).apply {
-                        position = onibus.position
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        title = "Ônibus - ${onibus.status}"
-                        icon = BitmapDrawable(context.resources, bitmap)
-
-                        setOnMarkerClickListener { _, _ ->
-                            selectedItem = "Ônibus: ${onibus.status}"
-                            map.controller.animateTo(onibus.position, 17.0, 600L)
-                            true
-                        }
-                    }
-                    map.overlays.add(marker)
-                }
-
-                map.invalidate()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(mapHeight)
-                .align(Alignment.TopCenter)
-                .clipToBounds()
-        )
-
-        // LOADING / ERRO (mantidos iguais)
+        // === LOADING & ERRO ===
         if (isLoading && route == null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = azulPrincipal, strokeWidth = 6.dp)
@@ -224,63 +364,15 @@ fun RouteScreen(
         }
 
         if (error) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Clear, tint = Color.Red, contentDescription = null, modifier = Modifier.size(80.dp))
-                Spacer(Modifier.height(24.dp))
-                Text("Rota não encontrada", color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { navController.popBackStack() }) { Text("Voltar") }
-            }
-        }
-
-        // CARD NOME DA ROTA
-        route?.let { r ->
-            Card(
-                modifier = Modifier.align(Alignment.TopStart).padding(16.dp).statusBarsPadding(),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
-                elevation = CardDefaults.cardElevation(12.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(16.dp)) {
-                    Image(
-                        painter = painterResource(id = R.drawable.outline_bus_alert_24),
-                        contentDescription = null,
-                        modifier = Modifier.size(36.dp),
-                        colorFilter = ColorFilter.tint(azulPrincipal)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(text = r.nome, fontWeight = FontWeight.Bold, color = azulEscuro)
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Clear, tint = Color.Red, modifier = Modifier.size(80.dp), contentDescription = null)
+                    Spacer(Modifier.height(24.dp))
+                    Text("Rota não encontrada", color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { navController.popBackStack() }) { Text("Voltar") }
                 }
             }
-        }
-
-        // INFO EMBAIXO – texto sempre azul (exceto quando for parada)
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = maxHeight * 0.08f)
-                .fillMaxWidth()
-                .background(Color.White.copy(alpha = 0.96f))
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Image(
-                painter = painterResource(id = R.drawable.outline_bus_alert_24),
-                contentDescription = "Ônibus",
-                modifier = Modifier.size(56.dp),
-                colorFilter = ColorFilter.tint(azulPrincipal)
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = selectedItem,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (selectedItem.contains("Parada")) Color(0xFF0066FF) else azulPrincipal, // só parada vermelha, tudo azul
-                textAlign = TextAlign.Center
-            )
         }
     }
 }

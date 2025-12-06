@@ -63,6 +63,44 @@ class UsersViewModel : ViewModel() {
         _userBeingEdited.value = null
     }
 
+    fun createUser(
+        nome: String,
+        email: String,
+        senha: String = "123456", // senha padrão temporária
+        acesso: Long = 1L,
+        onSuccess: () -> Unit = {},
+        onError: (Exception) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                // 1. Criar usuário no Firebase Auth
+                val authResult = FirebaseAuth.getInstance()
+                    .createUserWithEmailAndPassword(email, senha)
+                    .await()
+
+                val uid = authResult.user?.uid ?: throw Exception("Falha ao criar usuário")
+
+                // 2. Salvar no Firestore
+                val userData = hashMapOf(
+                    "id" to uid,
+                    "nome" to nome,
+                    "email" to email,
+                    "acesso" to acesso,
+                    "ativo" to true
+                )
+
+                db.collection("usuarios").document(uid).set(userData).await()
+
+                // 3. Enviar e-mail de verificação + redefinir senha (opcional)
+                authResult.user?.sendEmailVerification()?.await()
+
+                onSuccess()
+                loadUsers() // atualiza a lista
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
     fun loadUsers() {
         _isLoading.value = true
         viewModelScope.launch {

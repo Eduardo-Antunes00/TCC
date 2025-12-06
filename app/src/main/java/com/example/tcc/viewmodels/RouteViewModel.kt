@@ -40,11 +40,14 @@ class RouteViewModel : ViewModel() {
 
             if (pontos.size < 2) return null
 
+            val horariosMap = doc.get("horarios") as? Map<String, String> ?: emptyMap()
+
             Route(
                 id = idLong.toString(),
                 nome = nome,
                 cor = cor,
-                pontos = pontos // Tipo correto: List<org.osmdroid.util.GeoPoint>
+                pontos = pontos,
+                horarios = horariosMap  // ← adiciona aqui
             )
         } catch (e: Exception) {
             Log.e("RouteVM", "Erro ao carregar rota ID=$id", e)
