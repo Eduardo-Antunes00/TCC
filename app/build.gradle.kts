@@ -53,6 +53,8 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-common-ktx")
     implementation(libs.androidx.compose.runtime.livedata)
+    implementation("com.google.firebase:firebase-database-ktx:21.0.0")  // ← ESSA LINHA
+    implementation("com.google.firebase:firebase-database:20.3.1")
 
     // 🔹 Outras dependências do seu projeto
     val nav_version = "2.9.5"

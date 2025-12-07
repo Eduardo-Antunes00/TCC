@@ -147,31 +147,63 @@ fun RouteScreen(
                             map.overlays.clear()
 
                             route?.let { r ->
-                                val points = r.pontos.toMutableList()
-                                if (points.size >= 2 && points.last() != points.first()) {
-                                    points.add(points.first())
-                                }
+                                val pontosList = r.pontos
+                                val isFechada = pontosList.size >= 3 && pontosList.first() == pontosList.last()
+                                val pontos = if (isFechada) pontosList.dropLast(1) else pontosList
 
+                                // Linha de fundo (preta)
                                 val backgroundLine = Polyline().apply {
                                     outlinePaint.color = android.graphics.Color.BLACK
-                                    outlinePaint.strokeWidth = 12f
+                                    outlinePaint.strokeWidth = 13f
                                     outlinePaint.isAntiAlias = true
                                     outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                                     outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                                    setPoints(points)
+                                    setPoints(pontosList.toMutableList().apply { if (size >= 2 && last() != first()) add(first()) })
                                 }
 
+                                // Linha colorida da rota
                                 val foregroundLine = Polyline().apply {
                                     outlinePaint.color = android.graphics.Color.parseColor(r.cor)
-                                    outlinePaint.strokeWidth = 8f
+                                    outlinePaint.strokeWidth = 9f
                                     outlinePaint.isAntiAlias = true
                                     outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                                     outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                                    setPoints(points)
+                                    setPoints(pontosList.toMutableList().apply { if (size >= 2 && last() != first()) add(first()) })
                                 }
 
                                 map.overlays.add(backgroundLine)
                                 map.overlays.add(foregroundLine)
+
+                                // === SETAS PRETAS (só a ponta, perfeitas) ===
+                                for (i in pontos.indices) {
+                                    val start = pontos[i]
+                                    val end = pontos[(i + 1) % pontos.size]
+
+                                    val distancia = routeViewModel.distanciaEntrePontos(start, end)
+                                    if (distancia < 80) continue
+
+                                    val passos = maxOf(1, (distancia / 100.0).toInt())
+
+                                    repeat(passos) { passo ->
+                                        val t = (passo + 0.5) / passos.toDouble()
+                                        val pontoAtual = GeoPoint(
+                                            start.latitude + t * (end.latitude - start.latitude),
+                                            start.longitude + t * (end.longitude - start.longitude)
+                                        )
+
+                                        val bearing = routeViewModel.bearingCorreto(start, end)
+
+                                        map.overlays.add(Marker(map).apply {
+                                            position = pontoAtual
+                                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                            icon = ContextCompat.getDrawable(context, R.drawable.baseline_arrow_forward_ios_24)?.apply {
+                                                setTint(android.graphics.Color.BLACK)
+                                                setBounds(-13, -13, 13, 13) // tamanho ímpar = centralização perfeita
+                                            }
+                                            rotation = bearing.toFloat()
+                                        })
+                                    }
+                                }
 
                                 if (firstLoad) {
                                     foregroundLine.bounds?.let { bounds ->
@@ -182,7 +214,7 @@ fun RouteScreen(
                                 }
                             }
 
-                            // PARADAS
+                            // === PARADAS ===
                             paradas.forEach { parada ->
                                 Marker(map).apply {
                                     position = parada.ponto
@@ -192,7 +224,8 @@ fun RouteScreen(
                                     }
                                     title = "Parada ${parada.id}"
                                     setOnMarkerClickListener { _, _ ->
-                                        selectedItem = "Parada ${parada.id}"
+                                        val tempoEstimado = routeViewModel.calcularTempoParaParada(parada.ponto, onibusList, route?.pontos ?: emptyList())
+                                        selectedItem = "Parada ${parada.id}\nTempo estimado: $tempoEstimado min"
                                         map.controller.animateTo(parada.ponto, 17.0, 600L)
                                         true
                                     }
@@ -200,8 +233,14 @@ fun RouteScreen(
                                 }
                             }
 
-                            // ÔNIBUS
+                            // === ÔNIBUS ===
                             onibusList.forEach { onibus ->
+                                var position = onibus.position
+                                val distToLine = routeViewModel.distanciaPontoALinha(position, route?.pontos ?: emptyList())
+                                if (distToLine <= 50.0) {
+                                    position = routeViewModel.pontoMaisProximoNaLinha(position, route?.pontos ?: emptyList()) ?: position
+                                }
+
                                 val corInt = when (onibus.status) {
                                     "Em operação"     -> 0xFF0066FF.toInt()
                                     "Parado"          -> 0xFFD50000.toInt()
@@ -220,13 +259,13 @@ fun RouteScreen(
                                 drawable.draw(canvas)
 
                                 Marker(map).apply {
-                                    position = onibus.position
+                                    position = position
                                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                     title = "Ônibus - ${onibus.status}"
                                     icon = android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
                                     setOnMarkerClickListener { _, _ ->
                                         selectedItem = "Ônibus: ${onibus.status}"
-                                        map.controller.animateTo(onibus.position, 17.0, 600L)
+                                        map.controller.animateTo(position, 17.0, 600L)
                                         true
                                     }
                                     map.overlays.add(this)

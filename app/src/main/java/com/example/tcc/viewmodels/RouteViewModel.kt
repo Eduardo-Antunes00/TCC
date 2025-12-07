@@ -5,9 +5,14 @@ import androidx.lifecycle.ViewModel
 import com.example.tcc.database.model.OnibusInfo
 import com.example.tcc.database.model.ParadaComId
 import com.example.tcc.database.model.Route
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
-import org.osmdroid.util.GeoPoint  // IMPORT OBRIGATÓRIO
+import org.osmdroid.util.GeoPoint
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.max
 
 class RouteViewModel : ViewModel() {
 
@@ -29,13 +34,12 @@ class RouteViewModel : ViewModel() {
             val nome = doc.getString("nome") ?: "Rota $id"
             val cor = doc.getString("cor") ?: "#FF0066FF"
 
-            // Lê como List<Map<String, Any>> (o formato que você salva!)
             val pontosRaw = doc.get("codigo") as? List<Map<String, Any>> ?: return null
 
             val pontos = pontosRaw.mapNotNull { map ->
                 val lat = (map["lat"] as? Number)?.toDouble() ?: return@mapNotNull null
                 val lng = (map["lng"] as? Number)?.toDouble() ?: return@mapNotNull null
-                GeoPoint(lat, lng) // org.osmdroid.util.GeoPoint
+                GeoPoint(lat, lng)
             }
 
             if (pontos.size < 2) return null
@@ -47,7 +51,7 @@ class RouteViewModel : ViewModel() {
                 nome = nome,
                 cor = cor,
                 pontos = pontos,
-                horarios = horariosMap  // ← adiciona aqui
+                horarios = horariosMap
             )
         } catch (e: Exception) {
             Log.e("RouteVM", "Erro ao carregar rota ID=$id", e)
@@ -79,7 +83,7 @@ class RouteViewModel : ViewModel() {
 
                 ParadaComId(
                     id = idParada,
-                    ponto = GeoPoint(lat, lng) // org.osmdroid.util.GeoPoint
+                    ponto = GeoPoint(lat, lng)
                 )
             }.sortedBy { it.id }
         } catch (e: Exception) {
@@ -87,44 +91,146 @@ class RouteViewModel : ViewModel() {
             emptyList()
         }
     }
-    // ============ NOVO: BUSCAR ÔNIBUS EM TEMPO REAL ============
-    // ============ CORRIGIDO: BUSCAR ÔNIBUS EM TEMPO REAL ============
-    // VERSÃO FINAL: RETORNA TODOS OS ÔNIBUS DA ROTA COM SEU STATUS
-    suspend fun pegarOnibusDaRota(routeNumero: String): List<OnibusInfo> {
+
+    suspend fun pegarOnibusDaRota(routeId: String): List<OnibusInfo> {
         return try {
-            Log.d("RouteVM", "Buscando todos os ônibus da rota: $routeNumero")
+            Log.d("RouteVM", "Buscando todos os ônibus da rota: $routeId")
 
-            val rotaSnapshot = FirebaseFirestore.getInstance()
-                .collection("rotas")
-                .whereEqualTo("id", routeNumero.toLongOrNull() ?: return emptyList())
-                .limit(1)
-                .get()
-                .await()
+            val database = FirebaseDatabase.getInstance()
+            val ref = database.reference.child("rotas").child(routeId).child("onibus")
+            val snapshot = ref.get().await()
 
-            if (rotaSnapshot.isEmpty) return emptyList()
+            val onibusList = mutableListOf<OnibusInfo>()
+            snapshot.children.forEach { child ->
+                val lat = child.child("lat").value as? Double ?: return@forEach
+                val lng = child.child("lng").value as? Double ?: return@forEach
+                val velocity = child.child("velocidade").value as? Double ?: 0.0
 
-            val rotaDocId = rotaSnapshot.documents[0].id
-
-            val snapshot = FirebaseFirestore.getInstance()
-                .collection("onibus")
-                .whereEqualTo("rotaCodigo", rotaDocId)
-                .get()
-                .await()
-
-            snapshot.documents.mapNotNull { doc ->
-                val lat = doc.getDouble("lat") ?: return@mapNotNull null
-                val lng = doc.getDouble("lng") ?: return@mapNotNull null
-                val status = doc.getString("status") ?: "Desconhecido"
-
-                OnibusInfo(
+                onibusList.add(OnibusInfo(
                     position = GeoPoint(lat, lng),
-                    status = status,
-                    documentId = doc.id
-                )
+                    status = "Em operação",  // Assumindo status padrão; ajuste se necessário
+                    velocity = velocity
+                ))
             }
+
+            onibusList
         } catch (e: Exception) {
             Log.e("RouteVM", "Erro ao buscar ônibus", e)
             emptyList()
         }
+    }
+
+    fun bearingCorreto(start: GeoPoint, end: GeoPoint): Double {//ARRUMAR
+        val lat1 = Math.toRadians(start.latitude)
+        val lat2 = Math.toRadians(end.latitude)
+        val lon1 = Math.toRadians(start.longitude)
+        val lon2 = Math.toRadians(end.longitude)
+
+        val y = sin(lon2 - lon1) * cos(lat2)
+        val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(lon2 - lon1)
+
+        var bearing = Math.toDegrees(atan2(y, x))
+        bearing = (bearing + 360) % 360
+        bearing = 90 - bearing
+        if (bearing < 0) bearing += 360
+
+        return bearing
+    }
+
+    fun distanciaEntrePontos(a: GeoPoint, b: GeoPoint): Double {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, results)
+        return results[0].toDouble()
+    }
+
+    fun distanciaPontoALinha(ponto: GeoPoint, pontos: List<GeoPoint>): Double {
+        if (pontos.size < 2) return Double.MAX_VALUE
+        var menor = Double.MAX_VALUE
+        for (i in 0 until pontos.size - 1) {
+            val a = pontos[i]
+            val b = pontos[i + 1]
+            val dist = distanciaPontoASegmento(ponto, a, b)
+            if (dist < menor) menor = dist
+        }
+        return menor
+    }
+
+    private fun distanciaPontoASegmento(p: GeoPoint, a: GeoPoint, b: GeoPoint): Double {
+        val projetado = projetarPontoNoSegmento(p, a, b)
+        return distanciaEntrePontos(p, projetado)
+    }
+    fun pontoMaisProximoNaLinha(ponto: GeoPoint, pontos: List<GeoPoint>): GeoPoint? {
+        if (pontos.size < 2) return null
+        var melhor: GeoPoint? = null
+        var menorDist = Double.MAX_VALUE
+        for (i in 0 until pontos.size - 1) {
+            val a = pontos[i]
+            val b = pontos[i + 1]
+            val projetado = projetarPontoNoSegmento(ponto, a, b)
+            val dist = distanciaEntrePontos(ponto, projetado)
+            if (dist < menorDist) {
+                menorDist = dist
+                melhor = projetado
+            }
+        }
+        return melhor
+    }
+
+    private fun projetarPontoNoSegmento(p: GeoPoint, a: GeoPoint, b: GeoPoint): GeoPoint {
+        val lat1 = a.latitude
+        val lon1 = a.longitude
+        val lat2 = b.latitude
+        val lon2 = b.longitude
+        val dx = lon2 - lon1
+        val dy = lat2 - lat1
+        if (dx == 0.0 && dy == 0.0) return GeoPoint(a)
+        var t = ((p.longitude - lon1) * dx + (p.latitude - lat1) * dy) / (dx * dx + dy * dy)
+        t = t.coerceIn(0.0, 1.0)
+        return GeoPoint(lat1 + t * dy, lon1 + t * dx)
+    }
+
+    fun calcularDistanciaAcumulada(ponto: GeoPoint, pontos: List<GeoPoint>): Double {
+        val projetado = pontoMaisProximoNaLinha(ponto, pontos) ?: return 0.0
+        var acumulado = 0.0
+
+        for (i in 0 until pontos.size - 1) {
+            val a = pontos[i]
+            val b = pontos[i + 1]
+
+            if (estaNoSegmento(projetado, a, b)) {
+                acumulado += distanciaEntrePontos(a, projetado)
+                return acumulado
+            }
+            acumulado += distanciaEntrePontos(a, b)
+        }
+        return acumulado
+    }
+
+    private fun estaNoSegmento(p: GeoPoint, a: GeoPoint, b: GeoPoint): Boolean {
+        val distAB = distanciaEntrePontos(a, b)
+        val distAP = distanciaEntrePontos(a, p)
+        val distPB = distanciaEntrePontos(p, b)
+        return (distAP + distPB <= distAB + 1.0)
+    }
+
+    fun calcularTempoParaParada(paradaPosition: GeoPoint, onibusList: List<OnibusInfo>, pontos: List<GeoPoint>): String {
+        var minTempo = Double.MAX_VALUE
+        val distParada = calcularDistanciaAcumulada(paradaPosition, pontos)
+
+        onibusList.forEach { onibus ->
+            val distOnibus = calcularDistanciaAcumulada(onibus.position, pontos)
+            val dist = (distParada - distOnibus).coerceAtLeast(0.0) // Apenas se ônibus está antes da parada
+
+            var velocity = onibus.velocity
+            if (velocity < 2.78) { // < 10 km/h
+                velocity = 8.33 // 30 km/h padrão em m/s
+            }
+
+            val tempo = if (velocity > 0) (dist / velocity) / 60 else Double.MAX_VALUE // em minutos
+
+            if (tempo < minTempo) minTempo = tempo
+        }
+
+        return if (minTempo != Double.MAX_VALUE) minTempo.toInt().toString() else "Indisponível"
     }
 }

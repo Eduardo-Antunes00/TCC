@@ -1,6 +1,6 @@
-// RouteEditScreenAdm.kt
 package com.example.tcc.telas_adm
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
@@ -46,20 +47,19 @@ fun RouteEditScreenAdm(
     viewModel: RouteEditViewModel = viewModel()
 ) {
     val context = LocalContext.current
-
     var showAddDialog by remember { mutableStateOf(false) }
     var clickedPoint by remember { mutableStateOf<GeoPoint?>(null) }
     var showActionDialog by remember { mutableStateOf<Pair<String, Int>?>(null) }
     var modoMover by remember { mutableStateOf<Pair<String, Int>?>(null) }
     var showSaveDialog by remember { mutableStateOf(false) }
 
-    var selectedColor by remember { mutableStateOf(viewModel.corRota.value) }
-    LaunchedEffect(viewModel.corRota.value) { selectedColor = viewModel.corRota.value }
-
     LaunchedEffect(routeId) {
         Configuration.getInstance().load(context, context.getSharedPreferences("osmdroid", 0))
         viewModel.init(routeId)
     }
+
+    var selectedColor by remember { mutableStateOf(viewModel.corRota.value) }
+    LaunchedEffect(viewModel.corRota.value) { selectedColor = viewModel.corRota.value }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -98,8 +98,14 @@ fun RouteEditScreenAdm(
                                 clickedPoint = p
                                 if (modoMover != null) {
                                     val (tipo, index) = modoMover!!
-                                    if (tipo == "ponto") viewModel.moverPonto(index, p)
-                                    else viewModel.moverParada(index, p)
+                                    if (tipo == "parada") {
+                                        val sucesso = viewModel.tentarMoverParada(index, p)
+                                        if (!sucesso) {
+                                            Toast.makeText(context, "Parada muito longe da rota!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } else {
+                                        viewModel.moverPonto(index, p)
+                                    }
                                     modoMover = null
                                 } else {
                                     showAddDialog = true
@@ -112,29 +118,71 @@ fun RouteEditScreenAdm(
                     }
                 },
                 update = { map ->
-                    val eventOverlay = map.overlays.find { it is MapEventsOverlay }
+                    val eventOverlay = map.overlays.find { it is MapEventsOverlay } as? MapEventsOverlay
                     map.overlays.clear()
                     eventOverlay?.let { map.overlays.add(it) }
 
-                    // Linha da rota
+                    // === LINHA DA ROTA ===
                     if (viewModel.pontos.isNotEmpty()) {
-                        val linha = viewModel.pontos.map { it.ponto }.toMutableList()
-                        if (linha.size >= 2) linha.add(linha.first())
+                        val pontosRota = viewModel.pontos.map { it.ponto }
+                        val linhaCompleta = pontosRota.toMutableList().apply {
+                            if (size >= 2 && last() != first()) add(first())
+                        }
+
                         map.overlays.add(Polyline().apply {
                             outlinePaint.color = android.graphics.Color.parseColor(viewModel.corRota.value)
                             outlinePaint.strokeWidth = 14f
-                            setPoints(linha)
+                            setPoints(linhaCompleta)
                         })
+
+                        // === SETAS PERFEITAS (só a ponta, sem haste, centralizadas) ===
+                        if (viewModel.pontos.size >= 2) {
+                            val pontosList = viewModel.pontos.map { it.ponto }
+                            val isFechada = pontosList.size >= 3 && pontosList.first() == pontosList.last()
+                            val pontos = if (isFechada) pontosList.dropLast(1) else pontosList
+
+                            for (i in pontos.indices) {
+                                val start = pontos[i]
+                                val end = pontos[(i + 1) % pontos.size]
+
+                                val distancia = viewModel.distanciaEntrePontos(start, end)
+                                if (distancia < 70) continue
+
+                                val passos = maxOf(1, (distancia / 90.0).toInt())
+
+                                repeat(passos) { passo ->
+                                    val t = (passo + 0.5) / passos.toDouble()
+                                    val pontoAtual = GeoPoint(
+                                        start.latitude + t * (end.latitude - start.latitude),
+                                        start.longitude + t * (end.longitude - start.longitude)
+                                    )
+
+                                    val bearing = viewModel.bearingCorreto(start, end)
+
+                                    map.overlays.add(Marker(map).apply {
+                                        position = pontoAtual
+                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                        icon = ContextCompat.getDrawable(context, R.drawable.baseline_arrow_forward_ios_24)?.apply {
+                                            setTint(android.graphics.Color.BLACK)
+                                            setBounds(-13, -13, 13, 13)
+                                        }
+                                        rotation = bearing.toFloat()
+                                    })
+                                }
+                            }
+                        }
                     }
 
-                    // Marcadores de pontos e paradas
+                    // === PONTOS DA ROTA ===
                     viewModel.pontos.forEachIndexed { index, p ->
-                        val isFechamento = viewModel.pontos.size >= 2 && index == viewModel.pontos.size - 1 && p.ponto == viewModel.pontos.first().ponto
+                        val isFechamento = viewModel.pontos.size >= 2 &&
+                                index == viewModel.pontos.lastIndex &&
+                                p.ponto == viewModel.pontos.first().ponto
+
                         if (!isFechamento) {
                             map.overlays.add(Marker(map).apply {
                                 position = p.ponto
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                title = "Ponto ${p.id}"
                                 icon = ContextCompat.getDrawable(context, android.R.drawable.ic_menu_mylocation)?.apply {
                                     setTint(android.graphics.Color.BLACK)
                                 }
@@ -146,10 +194,20 @@ fun RouteEditScreenAdm(
                         }
                     }
 
+                    // === PARADAS ===
                     viewModel.paradas.forEachIndexed { index, parada ->
+                        val pontoNaLinha = viewModel.pontoMaisProximoNaLinha(parada.ponto)
+                        pontoNaLinha?.let { ponto ->
+                            map.overlays.add(Polyline().apply {
+                                outlinePaint.color = android.graphics.Color.BLACK
+                                outlinePaint.strokeWidth = 6f
+                                outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(10f, 10f), 0f)
+                                setPoints(listOf(parada.ponto, ponto))
+                            })
+                        }
+
                         map.overlays.add(Marker(map).apply {
                             position = parada.ponto
-                            title = "Parada ${parada.id}"
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                             icon = ContextCompat.getDrawable(context, R.drawable.baseline_place_24)?.apply {
                                 setTint(android.graphics.Color.RED)
@@ -167,6 +225,7 @@ fun RouteEditScreenAdm(
             )
         }
 
+        // Barra inferior de instruções
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -193,57 +252,124 @@ fun RouteEditScreenAdm(
         }
     }
 
-    // === DEMAIS DIÁLOGOS (adicionar, mover/excluir) permanecem iguais ===
-    // ... (os diálogos de adicionar ponto/parada e ações ficam iguais ao anterior)
-
+    // === DIÁLOGO: ADICIONAR PONTO OU PARADA ===
     if (showAddDialog && clickedPoint != null) {
+        val pertoDaLinha = viewModel.distanciaPontoALinha(clickedPoint!!) <= 50.0
+
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
-            title = { Text("Adicionar") },
-            text = { Text("O que deseja adicionar neste local?") },
+            title = { Text("Adicionar", fontWeight = FontWeight.Bold) },
+            text = { Text("O que deseja adicionar neste local?", textAlign = TextAlign.Center) },
             confirmButton = {
-                Row {
-                    TextButton({
-                        viewModel.adicionarPonto(clickedPoint!!)
-                        showAddDialog = false; clickedPoint = null
-                    }) { Text("Ponto da Rota") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton({
-                        viewModel.adicionarParada(clickedPoint!!)
-                        showAddDialog = false; clickedPoint = null
-                    }) { Text("Parada") }
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.adicionarPonto(clickedPoint!!)
+                            showAddDialog = false
+                            clickedPoint = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0066FF))
+                    ) {
+                        Text("Ponto da Rota", color = Color.White, fontWeight = FontWeight.Medium)
+                    }
+
+                    if (pertoDaLinha) {
+                        Button(
+                            onClick = {
+                                viewModel.adicionarParada(clickedPoint!!)
+                                showAddDialog = false
+                                clickedPoint = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                        ) {
+                            Text("Parada", color = Color.White, fontWeight = FontWeight.Medium)
+                        }
+                    } else {
+                        Text(
+                            text = "Só é possível adicionar paradas próximas à rota",
+                            color = Color.Red.copy(alpha = 0.9f),
+                            fontSize = 13.5.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
+                    Divider(color = Color.LightGray.copy(alpha = 0.3f))
+
+                    TextButton(
+                        onClick = {
+                            showAddDialog = false
+                            clickedPoint = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancelar", color = Color.Gray, fontWeight = FontWeight.Medium)
+                    }
                 }
             },
-            dismissButton = { TextButton({ showAddDialog = false; clickedPoint = null }) { Text("Cancelar") } }
+            dismissButton = {},
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
+    // === DIÁLOGO: AÇÕES (MOVER/EXCLUIR) ===
     showActionDialog?.let { (tipo, index) ->
         val id = if (tipo == "ponto") viewModel.pontos.getOrNull(index)?.id
         else viewModel.paradas.getOrNull(index)?.id ?: "?"
+
         AlertDialog(
             onDismissRequest = { showActionDialog = null },
-            title = { Text("${if (tipo == "ponto") "Ponto" else "Parada"} $id") },
+            title = { Text("${if (tipo == "ponto") "Ponto" else "Parada"} $id", fontWeight = FontWeight.Bold) },
             text = { Text("O que deseja fazer?") },
             confirmButton = {
-                Column {
-                    TextButton({
-                        modoMover = Pair(tipo, index)
-                        showActionDialog = null
-                    }) { Text("Mover", color = Color(0xFF0066FF), fontWeight = FontWeight.Bold) }
-                    TextButton({
-                        if (tipo == "ponto") viewModel.removerPonto(index)
-                        else viewModel.removerParada(index)
-                        showActionDialog = null
-                    }) { Text("Excluir", color = Color.Red) }
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            modoMover = Pair(tipo, index)
+                            showActionDialog = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0066FF))
+                    ) {
+                        Text("Mover", color = Color.White)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (tipo == "ponto") viewModel.removerPonto(index)
+                            else viewModel.removerParada(index)
+                            showActionDialog = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                        Text("Excluir", color = Color.White)
+                    }
+
+                    Divider(color = Color.LightGray.copy(alpha = 0.3f))
+
+                    TextButton(
+                        onClick = { showActionDialog = null },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Cancelar", color = Color.Gray, fontWeight = FontWeight.Medium)
+                    }
                 }
             },
-            dismissButton = { TextButton({ showActionDialog = null }) { Text("Cancelar") } }
+            dismissButton = {},
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
-    // === DIÁLOGO DE SALVAR COM HORÁRIOS ===
-    // === DIÁLOGO DE SALVAR COM HORÁRIOS EM LazyColumn ===
+    // === DIÁLOGO: SALVAR ROTA (com nome, cor e horários) ===
     if (showSaveDialog) {
         val diasDaSemana = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
         val cores = listOf("#FF0066FF", "#FFFF0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0", "#FFFF5722", "#FF795548", "#FF607D8B")
@@ -254,9 +380,8 @@ fun RouteEditScreenAdm(
             text = {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.heightIn(max = 500.dp) // altura máxima antes de rolar
+                    modifier = Modifier.heightIn(max = 500.dp)
                 ) {
-                    // Nome da rota
                     item {
                         OutlinedTextField(
                             value = viewModel.nomeRota.value,
@@ -266,11 +391,9 @@ fun RouteEditScreenAdm(
                         )
                     }
 
-                    // Horários por dia
                     item { Text("Horários de funcionamento:", fontWeight = FontWeight.Medium) }
 
                     items(diasDaSemana) { dia ->
-
                         OutlinedTextField(
                             value = viewModel.horarios[dia] ?: "",
                             onValueChange = { viewModel.horarios[dia] = it },
@@ -281,7 +404,6 @@ fun RouteEditScreenAdm(
                         )
                     }
 
-                    // Seleção de cor
                     item { Spacer(Modifier.height(8.dp)) }
                     item { Text("Cor da linha:", fontWeight = FontWeight.Medium) }
                     item {
@@ -317,7 +439,6 @@ fun RouteEditScreenAdm(
                             }
                         }
                     }
-
                     item { Spacer(Modifier.height(8.dp)) }
                 }
             },
@@ -339,8 +460,14 @@ fun RouteEditScreenAdm(
         )
     }
 
+    // === LOADING ===
     if (viewModel.isLoading.value) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center
+        ) {
             CircularProgressIndicator(color = Color(0xFF0066FF), strokeWidth = 6.dp)
         }
     }
