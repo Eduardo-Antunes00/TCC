@@ -169,7 +169,7 @@ fun SplashWithPersistentAuth(
                         colorFilter = ColorFilter.tint(azulPrincipal)
                     )
                     Spacer(modifier = Modifier.height(40.dp))
-                    Text("Onibo", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = azulPrincipal)
+                    Text("Onbo", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = azulPrincipal)
                     Spacer(modifier = Modifier.height(48.dp))
                     CircularProgressIndicator(color = azulPrincipal, strokeWidth = 6.dp, modifier = Modifier.size(60.dp))
                     Spacer(modifier = Modifier.height(16.dp))

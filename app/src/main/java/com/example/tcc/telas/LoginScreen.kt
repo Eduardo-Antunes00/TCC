@@ -75,7 +75,7 @@ fun LoginScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
-                    Text("Onibo", color = Color.White, fontSize = 25.sp)
+                    Text("Onbo", color = Color.White, fontSize = 25.sp)
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
             )

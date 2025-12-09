@@ -71,7 +71,7 @@ fun RouteEditScreenAdm(
                 )
             },
             navigationIcon = {
-                IconButton(onClick = { navController.popBackStack() }) {
+                IconButton(onClick = { navController.navigate("homeAdm") }) {
                     Icon(Icons.Default.ArrowBack, tint = Color.White, contentDescription = "Voltar")
                 }
             },
@@ -372,7 +372,16 @@ fun RouteEditScreenAdm(
     // === DIÁLOGO: SALVAR ROTA (com nome, cor e horários) ===
     if (showSaveDialog) {
         val diasDaSemana = listOf("Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom")
-        val cores = listOf("#FF0066FF", "#FFFF0000", "#FF00FF00", "#FFFFA500", "#FF9C27B0", "#FFFF5722", "#FF795548", "#FF607D8B")
+        val cores = listOf(
+            "#FF8ABDFF",  // azul
+            "#FFFF6B6B",  // vermelho
+            "#FF77DD77",  // verde
+            "#FFFFD27D",  // laranja/amarelo
+            "#FFD7A8FF",  // roxo
+            "#FFFF8A65",  // laranja queimado
+            "#FFB89F8B",  // marrom claro
+            "#FFA8C8D8"   // azul acinzentado
+        )
 
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },

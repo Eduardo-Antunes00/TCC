@@ -79,7 +79,7 @@ fun HomeScreenAdm(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Onibo - ADM",
+                        "Onbo - ADM",
                         style = MaterialTheme.typography.headlineSmall,
                         color = azulEscuro
                     )
@@ -167,7 +167,7 @@ fun HomeScreenAdm(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            "Onibo - ADM",
+                            "Onbo - ADM",
                             color = Color.White,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
@@ -394,7 +394,7 @@ fun HomeScreenAdm(
                         // BOTÃO DE ADICIONAR
                         Button(
                             onClick = { navController.navigate("routeEditAdm/new") },
-                            colors = ButtonDefaults.buttonColors(containerColor = azulClaro),
+                            colors = ButtonDefaults.buttonColors(containerColor = azulEscuro),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(56.dp),

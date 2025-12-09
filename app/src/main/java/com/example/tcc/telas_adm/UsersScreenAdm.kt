@@ -1,4 +1,3 @@
-// arquivo: com/example/tcc/telas_adm/UsersScreenAdm.kt
 package com.example.tcc.telas_adm
 
 import androidx.compose.foundation.Image
@@ -17,8 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -39,84 +36,57 @@ fun UsersScreenAdm(
     val userBeingEdited by viewModel.userBeingEdited.collectAsState()
     val isLoadingEdit by viewModel.isLoadingEdit.collectAsState()
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var userToDelete by remember { mutableStateOf<User?>(null) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
 
-    // Estados do formulário
-    var isCreatingNewUser by rememberSaveable { mutableStateOf(false) }
+    // Estados para edição
     var editNome by rememberSaveable { mutableStateOf("") }
-    var editEmail by rememberSaveable { mutableStateOf("") }
-    var editSenha by rememberSaveable { mutableStateOf("") } // Novo campo
     var editAcesso by rememberSaveable { mutableStateOf(1L) }
 
-// Crie esta extensão uma única vez (pode colocar fora do composable)
-    val OutlinedTextFieldCoresPretas = TextFieldDefaults.colors(
-        // Cores do texto digitado
-        focusedTextColor = Color.Black,
-        unfocusedTextColor = Color.Black,
-        disabledTextColor = Color.Black,
-        errorTextColor = Color.Red,
-
-        // Cores do container (fundo) ← ESSAS DUAS RESOLVEM O FUNDO PRETO
-        focusedContainerColor = Color.White,
-        unfocusedContainerColor = Color.White,
-        disabledContainerColor = Color.White,
-        errorContainerColor = Color.White,
-
-        // Cursor
-        cursorColor = Color.Black,
-        errorCursorColor = Color.Red,
-
-        // Borda / indicador (linha de baixo)
-        focusedIndicatorColor = Color.Black,
-        unfocusedIndicatorColor = Color.Black,
-        disabledIndicatorColor = Color.Black.copy(alpha = 0.4f),
-        errorIndicatorColor = Color.Red,
-
-        // Label
-        focusedLabelColor = Color.Black,
-        unfocusedLabelColor = Color.Black.copy(alpha = 0.7f),
-        disabledLabelColor = Color.Black.copy(alpha = 0.6f),
-        errorLabelColor = Color.Red,
-
-        // Ícones (leading/trailing)
-        focusedLeadingIconColor = Color.Black,
-        unfocusedLeadingIconColor = Color.Black.copy(alpha = 0.7f),
-        focusedTrailingIconColor = Color.Black,
-        unfocusedTrailingIconColor = Color.Black.copy(alpha = 0.7f),
-    )
     // Cores
     val azulPrincipal = Color(0xFF0066FF)
     val azulEscuro = Color(0xFF003366)
     val vermelhoExclusao = Color(0xFFE53935)
 
     // Filtragem
-    val filteredUsers = users.filter { it.ativo == true }
+    val filteredUsers = users
+        .filter { it.ativo == true }
         .filter {
             searchQuery.isBlank() ||
-                    it.nome?.contains(searchQuery, ignoreCase = true) == true ||
-                    it.email?.contains(searchQuery, ignoreCase = true) == true
+                    it.nome.orEmpty().contains(searchQuery, ignoreCase = true) ||
+                    it.email.orEmpty().contains(searchQuery, ignoreCase = true)
         }
 
-    // Limpar campos ao criar novo
-    LaunchedEffect(isCreatingNewUser) {
-        if (isCreatingNewUser) {
-            editNome = ""
-            editEmail = ""
-            editSenha = "" // limpa a senha
-            editAcesso = 1L
+    // Preenche ao editar
+    LaunchedEffect(userBeingEdited) {
+        userBeingEdited?.let {
+            editNome = it.nome.orEmpty()
+            editAcesso = it.acesso ?: 1L
         }
     }
 
-    // Preencher ao editar
-    LaunchedEffect(userBeingEdited, isCreatingNewUser) {
-        if (!isCreatingNewUser && userBeingEdited != null) {
-            editNome = userBeingEdited!!.nome.orEmpty()
-            editEmail = userBeingEdited!!.email.orEmpty()
-            editAcesso = userBeingEdited!!.acesso ?: 1L
-        }
-    }
+    // Cores padrão dos TextFields (tudo preto, fundo branco)
+    val textFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = Color.Black,
+        unfocusedTextColor = Color.Black,
+        disabledTextColor = Color.Black,
+        errorTextColor = Color.Red,
+
+        focusedContainerColor = Color.White,
+        unfocusedContainerColor = Color.White,
+        disabledContainerColor = Color.White,
+
+        cursorColor = Color.Black,
+        errorCursorColor = Color.Red,
+
+        focusedBorderColor = Color.Black,
+        unfocusedBorderColor = Color.Black.copy(alpha = 0.5f),
+        disabledBorderColor = Color.Black.copy(alpha = 0.3f),
+
+        focusedLabelColor = Color.Black,
+        unfocusedLabelColor = Color.Black.copy(alpha = 0.7f),
+        disabledLabelColor = Color.Black.copy(alpha = 0.6f),
+    )
 
     Scaffold(
         topBar = {
@@ -131,112 +101,138 @@ fun UsersScreenAdm(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    // Navega pra tela de registro com um parâmetro pra saber que veio do admin
-                    navController.navigate("register?fromAdmin=true") {
-                        // Opcional: limpa a pilha se quiser
-                        // popUpTo(navController.graph.startDestinationId)
-                        // launchSingleTop = true
-                    }
-                },
+            ExtendedFloatingActionButton(
+                onClick = { navController.navigate("register?fromAdmin=true") },
                 containerColor = azulPrincipal,
-                content = Icon(Icons.Default.Add, "Novo usuário", tint = Color.White)
-            )
+                contentColor = Color.White
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Novo usuário", fontWeight = FontWeight.SemiBold)
+            }
         },
         containerColor = Color(0xFFF0F7FF)
     ) { paddingValues ->
 
         Column(modifier = Modifier.padding(paddingValues)) {
 
-            // Barra de pesquisa
+            // Barra de busca
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 placeholder = { Text("Buscar por nome ou e-mail...", color = Color.Gray) },
-                leadingIcon = { Icon(Icons.Default.Person, "Buscar", tint = azulPrincipal) },
+                leadingIcon = { Icon(Icons.Default.Search, null, tint = azulPrincipal) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, "Limpar", tint = Color.Gray)
+                            Icon(Icons.Default.Close, null, tint = Color.Gray)
                         }
                     }
                 },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = azulPrincipal,
-                    unfocusedBorderColor = Color.Black.copy(0.3f),
-                    cursorColor = azulPrincipal,
-                    focusedTextColor = Color.Black,
-                    unfocusedTextColor = Color.Black,
+                colors = textFieldColors.copy(
+                    cursorColor = azulPrincipal
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .background(Color.White, shape = MaterialTheme.shapes.large)
+                    .padding(16.dp)
+                    .background(Color.White, MaterialTheme.shapes.large)
             )
 
             Box(modifier = Modifier.weight(1f)) {
-                if(isLoading){
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = azulPrincipal)
+                when {
+                    isLoading -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            CircularProgressIndicator(color = azulPrincipal)
+                        }
                     }
-                }
-                 if (filteredUsers.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (searchQuery.isEmpty()) "Nenhum usuário encontrado"
-                            else "Nenhum usuário para \"$searchQuery\"",
-                            color = Color.Gray,
-                            fontSize = 18.sp,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+                    filteredUsers.isEmpty() -> {
+                        Box(Modifier.fillMaxSize(), Alignment.Center) {
+                            Text(
+                                text = if (searchQuery.isEmpty()) "Nenhum usuário encontrado"
+                                else "Nenhum resultado para \"$searchQuery\"",
+                                color = Color.Gray,
+                                fontSize = 18.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
                     }
-                } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(filteredUsers, key = { it.id ?: it.hashCode() }) { user ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                                shape = MaterialTheme.shapes.large
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                    else -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(filteredUsers, key = { it.id!! }) { user ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(8.dp),
+                                    shape = MaterialTheme.shapes.large
                                 ) {
-                                    when (user.acesso) {
-                                        1L -> Icon(Icons.Default.Person, "Usuário", tint = azulPrincipal, modifier = Modifier.size(48.dp))
-                                        2L -> Image(painterResource(R.drawable.outline_driver), "Motorista", modifier = Modifier.size(40.dp), colorFilter = ColorFilter.tint(azulEscuro))
-                                        3L -> Image(painterResource(R.drawable.outline_adm_icon), "Administrador", modifier = Modifier.size(40.dp), colorFilter = ColorFilter.tint(Color(0xFFFF6D00)))
-                                    }
-
-                                    Spacer(Modifier.width(16.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(user.nome.orEmpty(), fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(user.email.orEmpty(), color = Color.DarkGray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(
-                                            text = when (user.acesso) { 3L -> "Administrador" ; 2L -> "Motorista" ; else -> "Usuário comum" },
-                                            color = when (user.acesso) { 3L -> Color(0xFFFF6D00) ; 2L -> azulEscuro ; else -> azulPrincipal },
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-
-                                    Row {
-                                        IconButton(onClick = {
-                                            isCreatingNewUser = false
-                                            viewModel.selectUserForEdit(user.id ?: return@IconButton)
-                                        }) {
-                                            Icon(Icons.Default.Create, "Editar", tint = azulEscuro)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // Ícone do tipo
+                                        when (user.acesso) {
+                                            1L -> Icon(Icons.Default.Person, null, tint = azulPrincipal, modifier = Modifier.size(48.dp))
+                                            2L -> Image(
+                                                painter = painterResource(R.drawable.outline_driver),
+                                                contentDescription = "Motorista",
+                                                modifier = Modifier.size(40.dp),
+                                                colorFilter = ColorFilter.tint(azulEscuro)
+                                            )
+                                            3L -> Image(
+                                                painter = painterResource(R.drawable.outline_adm_icon),
+                                                contentDescription = "Administrador",
+                                                modifier = Modifier.size(40.dp),
+                                                colorFilter = ColorFilter.tint(Color(0xFFFF6D00))
+                                            )
                                         }
-                                        IconButton(onClick = { userToDelete = user }) {
-                                            Icon(Icons.Default.Delete, "Excluir", tint = vermelhoExclusao)
+
+                                        Spacer(Modifier.width(16.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = user.nome.orEmpty(),
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = user.email.orEmpty(),
+                                                color = Color.DarkGray,
+                                                fontSize = 14.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis  // RETICÊNCIAS AQUI
+                                            )
+                                            Text(
+                                                text = when (user.acesso) {
+                                                    3L -> "Administrador"
+                                                    2L -> "Motorista"
+                                                    else -> "Usuário comum"
+                                                },
+                                                color = when (user.acesso) {
+                                                    3L -> Color(0xFFFF6D00)
+                                                    2L -> azulEscuro
+                                                    else -> azulPrincipal
+                                                },
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+
+                                        Row {
+                                            IconButton(onClick = {
+                                                viewModel.selectUserForEdit(user.id!!)
+                                            }) {
+                                                Icon(Icons.Default.Edit, "Editar", tint = azulEscuro)
+                                            }
+                                            IconButton(onClick = { userToDelete = user }) {
+                                                Icon(Icons.Default.Delete, "Excluir", tint = vermelhoExclusao)
+                                            }
                                         }
                                     }
                                 }
@@ -245,17 +241,17 @@ fun UsersScreenAdm(
                     }
                 }
 
-                // Dialog de exclusão
+                // Confirmação de exclusão
                 userToDelete?.let { user ->
                     AlertDialog(
                         onDismissRequest = { userToDelete = null },
-                        title = { Text("Excluir usuário?", color = vermelhoExclusao, fontWeight = FontWeight.Bold) },
+                        title = { Text("Excluir usuário?", color = vermelhoExclusao) },
                         text = {
                             Column {
-                                Text("Tem certeza que deseja excluir permanentemente:")
+                                Text("Isso removerá permanentemente:")
                                 Spacer(Modifier.height(8.dp))
                                 Text(user.nome.orEmpty(), fontWeight = FontWeight.SemiBold)
-                                Text(user.email.orEmpty(), color = Color.Black.copy(0.7f))
+                                Text(user.email.orEmpty(), color = Color.DarkGray)
                                 Spacer(Modifier.height(12.dp))
                                 Text("Esta ação não pode ser desfeita.", color = vermelhoExclusao)
                             }
@@ -263,15 +259,12 @@ fun UsersScreenAdm(
                         confirmButton = {
                             TextButton(
                                 onClick = {
-                                    val id = user.id ?: return@TextButton
-
-                                    // 1. Fecha o dialog imediatamente
+                                    // 1. Fecha o diálogo imediatamente
                                     userToDelete = null
 
                                     // 2. Depois dispara a exclusão (em background)
-                                    viewModel.deleteUser(id) {
-                                        // Aqui você pode mostrar um SnackBar de sucesso, se quiser
-                                        // ex: scaffoldState.snackbarHostState.showSnackbar("Usuário excluído")
+                                    viewModel.deleteUser(user.id!!) {
+                                        // Opcional: mostrar SnackBar ou Toast de sucesso
                                     }
                                 },
                                 colors = ButtonDefaults.textButtonColors(contentColor = vermelhoExclusao)
@@ -279,18 +272,18 @@ fun UsersScreenAdm(
                                 Text("Excluir permanentemente")
                             }
                         },
-                        dismissButton = { TextButton(onClick = { userToDelete = null }) { Text("Cancelar") } }
+                        dismissButton = {
+                            TextButton(onClick = { userToDelete = null }) {
+                                Text("Cancelar")
+                            }
+                        }
                     )
                 }
 
-                // BottomSheet: Criação ou Edição
-                if (userBeingEdited != null || isCreatingNewUser) {
+                // BottomSheet de edição
+                if (userBeingEdited != null) {
                     ModalBottomSheet(
-                        onDismissRequest = {
-                            viewModel.clearUserBeingEdited()
-                            isCreatingNewUser = false
-                        },
-                        sheetState = sheetState,
+                        onDismissRequest = { viewModel.clearUserBeingEdited() },
                         containerColor = Color.White
                     ) {
                         Column(
@@ -298,16 +291,12 @@ fun UsersScreenAdm(
                                 .padding(24.dp)
                                 .navigationBarsPadding()
                                 .imePadding(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            Arrangement.spacedBy(16.dp)
                         ) {
-                            Text(
-                                text = if (isCreatingNewUser) "Novo Usuário" else "Editar Usuário",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text("Editar Usuário", fontSize = 22.sp, fontWeight = FontWeight.Bold)
 
                             if (isLoadingEdit) {
-                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Box(Modifier.fillMaxWidth(), Alignment.Center) {
                                     CircularProgressIndicator(color = azulPrincipal)
                                 }
                             } else {
@@ -315,54 +304,27 @@ fun UsersScreenAdm(
                                     value = editNome,
                                     onValueChange = { editNome = it },
                                     label = { Text("Nome") },
+                                    singleLine = true,
                                     modifier = Modifier.fillMaxWidth(),
-                                    colors = OutlinedTextFieldCoresPretas
-
+                                    colors = textFieldColors
                                 )
 
-
-                                if (!isCreatingNewUser && userBeingEdited != null) {
-                                    OutlinedTextField(
-                                        value = userBeingEdited!!.email.orEmpty(),
-                                        onValueChange = {}, // não faz nada
-                                        label = { Text("E-mail") },
-                                        readOnly = true,  // ← isso bloqueia edição
-                                        enabled = false, // desativa interação visual
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldCoresPretas.copy(
-                                            disabledTextColor = Color.Black,
-                                            disabledLabelColor = Color.Black.copy(0.7f),
-                                            disabledContainerColor = Color.White
-                                        ),
-                                        trailingIcon = {
-                                            Icon(Icons.Default.Lock, contentDescription = "E-mail fixo", tint = Color.Gray)
-                                        }
+                                OutlinedTextField(
+                                    value = userBeingEdited!!.email.orEmpty(),
+                                    onValueChange = {},
+                                    label = { Text("E-mail") },
+                                    readOnly = true,
+                                    enabled = false,
+                                    trailingIcon = {
+                                        Icon(Icons.Default.Lock, "E-mail fixo", tint = Color.Gray)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = textFieldColors.copy(
+                                        disabledTextColor = Color.Black,
+                                        disabledLabelColor = Color.Black.copy(0.6f)
                                     )
-                                } else if (isCreatingNewUser) {
-                                    // Só permite digitar e-mail quando estiver criando
-                                    OutlinedTextField(
-                                        value = editEmail,
-                                        onValueChange = { editEmail = it },
-                                        label = { Text("E-mail") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldCoresPretas
-                                    )
-                                }
+                                )
 
-                                // Campo de senha SOMENTE na criação
-                                if (isCreatingNewUser) {
-                                    var senhaVisivel by remember { mutableStateOf(false) }
-                                    OutlinedTextField(
-                                        value = editSenha,
-                                        onValueChange = { editSenha = it },
-                                        label = { Text("Senha (deixe vazio para usar 123456)") },
-                                        visualTransformation = if (senhaVisivel) VisualTransformation.None else PasswordVisualTransformation(),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldCoresPretas,
-                                    )
-                                }
-
-                                // Dropdown de nível de acesso
                                 var expanded by remember { mutableStateOf(false) }
                                 ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
                                     OutlinedTextField(
@@ -377,54 +339,38 @@ fun UsersScreenAdm(
                                         label = { Text("Nível de acesso") },
                                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                                         modifier = Modifier.menuAnchor().fillMaxWidth(),
-                                        colors = OutlinedTextFieldCoresPretas
+                                        colors = textFieldColors
                                     )
                                     ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                        DropdownMenuItem(text = { Text("Usuário comum") }, onClick = { editAcesso = 1L; expanded = false })
-                                        DropdownMenuItem(text = { Text("Motorista") }, onClick = { editAcesso = 2L; expanded = false })
-                                        DropdownMenuItem(text = { Text("Administrador") }, onClick = { editAcesso = 3L; expanded = false })
+                                        listOf("Usuário comum", "Motorista", "Administrador").forEachIndexed { i, texto ->
+                                            DropdownMenuItem(
+                                                text = { Text(texto) },
+                                                onClick = {
+                                                    editAcesso = (i + 1).toLong()
+                                                    expanded = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
 
-                                // Botões
-                                Row(
-                                    horizontalArrangement = Arrangement.End,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    TextButton(onClick = {
-                                        viewModel.clearUserBeingEdited()
-                                        isCreatingNewUser = false
-                                    }) {
+                                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(onClick = { viewModel.clearUserBeingEdited() }) {
                                         Text("Cancelar")
                                     }
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(12.dp))
                                     Button(
                                         onClick = {
-                                            if (isCreatingNewUser) {
-                                                val senhaFinal = if (editSenha.trim().isEmpty()) "123456" else editSenha.trim()
-                                                viewModel.createUser(
-                                                    nome = editNome.trim(),
-                                                    email = editEmail.trim(),
-                                                    senha = senhaFinal,
-                                                    acesso = editAcesso,
-                                                    onSuccess = { isCreatingNewUser = false }
-                                                    onSuccess = { isCreatingNewUser = false }
-                                                )
-                                            } else {
-                                                viewModel.updateUser(
-                                                    id = userBeingEdited?.id ?: return@Button,
-                                                    novoNome = editNome.trim(),
-                                                    novoAcesso = editAcesso,
-                                                    onSuccess = { viewModel.clearUserBeingEdited() }
-                                                )
-                                            }
+                                            viewModel.updateUser(
+                                                id = userBeingEdited!!.id!!,
+                                                novoNome = editNome.trim(),
+                                                novoAcesso = editAcesso,
+                                                onSuccess = { viewModel.clearUserBeingEdited() }
+                                            )
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal)
                                     ) {
-                                        Text(
-                                            text = if (isCreatingNewUser) "Criar Usuário" else "Salvar Alterações",
-                                            color = Color.White
-                                        )
+                                        Text("Salvar", color = Color.White)
                                     }
                                 }
                             }
