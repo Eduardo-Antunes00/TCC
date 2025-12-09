@@ -133,14 +133,16 @@ fun UsersScreenAdm(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    isCreatingNewUser = true
-                    viewModel.clearUserBeingEdited()
+                    // Navega pra tela de registro com um parâmetro pra saber que veio do admin
+                    navController.navigate("register?fromAdmin=true") {
+                        // Opcional: limpa a pilha se quiser
+                        // popUpTo(navController.graph.startDestinationId)
+                        // launchSingleTop = true
+                    }
                 },
                 containerColor = azulPrincipal,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Adicionar usuário")
-            }
+                content = Icon(Icons.Default.Add, "Novo usuário", tint = Color.White)
+            )
         },
         containerColor = Color(0xFFF0F7FF)
     ) { paddingValues ->
@@ -318,13 +320,34 @@ fun UsersScreenAdm(
 
                                 )
 
-                                OutlinedTextField(
-                                    value = editEmail,
-                                    onValueChange = { editEmail = it },
-                                    label = { Text("E-mail") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = OutlinedTextFieldCoresPretas
-                                )
+
+                                if (!isCreatingNewUser && userBeingEdited != null) {
+                                    OutlinedTextField(
+                                        value = userBeingEdited!!.email.orEmpty(),
+                                        onValueChange = {}, // não faz nada
+                                        label = { Text("E-mail") },
+                                        readOnly = true,  // ← isso bloqueia edição
+                                        enabled = false, // desativa interação visual
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = OutlinedTextFieldCoresPretas.copy(
+                                            disabledTextColor = Color.Black,
+                                            disabledLabelColor = Color.Black.copy(0.7f),
+                                            disabledContainerColor = Color.White
+                                        ),
+                                        trailingIcon = {
+                                            Icon(Icons.Default.Lock, contentDescription = "E-mail fixo", tint = Color.Gray)
+                                        }
+                                    )
+                                } else if (isCreatingNewUser) {
+                                    // Só permite digitar e-mail quando estiver criando
+                                    OutlinedTextField(
+                                        value = editEmail,
+                                        onValueChange = { editEmail = it },
+                                        label = { Text("E-mail") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = OutlinedTextFieldCoresPretas
+                                    )
+                                }
 
                                 // Campo de senha SOMENTE na criação
                                 if (isCreatingNewUser) {
@@ -384,14 +407,13 @@ fun UsersScreenAdm(
                                                     email = editEmail.trim(),
                                                     senha = senhaFinal,
                                                     acesso = editAcesso,
-                                                    onSuccess = { isCreatingNewUser = false },
-                                                    onError = { /* opcional: mostrar erro */ }
+                                                    onSuccess = { isCreatingNewUser = false }
+                                                    onSuccess = { isCreatingNewUser = false }
                                                 )
                                             } else {
                                                 viewModel.updateUser(
                                                     id = userBeingEdited?.id ?: return@Button,
                                                     novoNome = editNome.trim(),
-                                                    novoEmail = editEmail.trim(),
                                                     novoAcesso = editAcesso,
                                                     onSuccess = { viewModel.clearUserBeingEdited() }
                                                 )

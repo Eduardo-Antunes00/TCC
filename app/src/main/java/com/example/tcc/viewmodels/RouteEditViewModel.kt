@@ -204,10 +204,52 @@ class RouteEditViewModel : ViewModel() {
 
     fun removerPonto(index: Int) {
         if (index !in _pontos.indices) return
-        _pontos.removeAt(index)
-        if (_pontos.isNotEmpty() && _pontos.last().ponto == _pontos.first().ponto) {
-            _pontos.removeAt(_pontos.lastIndex)
+
+        val wasClosed = _pontos.size >= 3 && _pontos.first().ponto == _pontos.last().ponto
+
+        when {
+            // Caso especial: remover o ponto 1 (índice 0) em rota fechada
+            wasClosed && index == 0 -> {
+                // Remove o ponto 1 (índice 0)
+                _pontos.removeAt(0)
+                // Remove o último ponto (cópia antiga do ponto 1)
+                _pontos.removeAt(_pontos.lastIndex)
+
+                // Agora o novo ponto 1 é o antigo ponto 2
+                // Criamos uma cópia dele no final para manter a rota fechada
+                val novoPontoInicial = _pontos[0].ponto
+                _pontos.add(_pontos.size, PontoComId(_pontos.maxOf { it.id } + 1, novoPontoInicial))
+            }
+
+            // Caso especial: remover o último ponto (cópia do primeiro)
+            wasClosed && index == _pontos.lastIndex -> {
+                // Remove o último (cópia)
+                _pontos.removeAt(_pontos.lastIndex)
+                // Remove o primeiro (original)
+                _pontos.removeAt(0)
+                // Recria o último como cópia do novo primeiro (antigo ponto 2)
+                val novoPontoInicial = _pontos[0].ponto
+                _pontos.add(PontoComId(_pontos.maxOf { it.id } + 1, novoPontoInicial))
+            }
+
+            // Qualquer outro ponto (meio ou rota aberta)
+            else -> {
+                _pontos.removeAt(index)
+
+                // Se era fechada e ainda tem pontos suficientes, recria o fechamento
+                if (wasClosed && _pontos.size >= 2) {
+                    _pontos.removeAt(_pontos.lastIndex) // remove a cópia antiga
+                    val novoPontoInicial = _pontos[0].ponto
+                    _pontos.add(PontoComId(_pontos.maxOf { it.id } + 1, novoPontoInicial))
+                }
+            }
         }
+
+        // Reordena IDs sequencialmente (1, 2, 3...)
+        _pontos.forEachIndexed { i, ponto ->
+            _pontos[i] = ponto.copy(id = i + 1)
+        }
+
         recalcularDistanciasParadas()
         triggerUpdate()
     }

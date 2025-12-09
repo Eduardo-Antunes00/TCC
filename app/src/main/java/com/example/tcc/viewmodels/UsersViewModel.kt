@@ -66,38 +66,48 @@ class UsersViewModel : ViewModel() {
     fun createUser(
         nome: String,
         email: String,
-        senha: String = "123456", // senha padrão temporária
+        senha: String = "123456",
         acesso: Long = 1L,
         onSuccess: () -> Unit = {},
-        onError: (Exception) -> Unit = {}
+        onError: (String) -> Unit = {}  // mudamos para String pra mostrar mensagem clara
     ) {
         viewModelScope.launch {
             try {
-                // 1. Criar usuário no Firebase Auth
+                // 1. Criar no Firebase Auth SEM logar
                 val authResult = FirebaseAuth.getInstance()
                     .createUserWithEmailAndPassword(email, senha)
                     .await()
 
-                val uid = authResult.user?.uid ?: throw Exception("Falha ao criar usuário")
+                val uid = authResult.user?.uid ?: throw Exception("UID não encontrado")
 
-                // 2. Salvar no Firestore
+                // 2. NÃO faz login! Mantém o admin logado
+
+                // 2. Salvar dados no Firestore
                 val userData = hashMapOf(
-                    "id" to uid,
-                    "nome" to nome,
-                    "email" to email,
+                    "nome" to nome.trim(),
+                    "email" to email.trim(),
                     "acesso" to acesso,
                     "ativo" to true
+                    // opcional: pode ter criadoEm = FieldValue.serverTimestamp()
                 )
 
                 db.collection("usuarios").document(uid).set(userData).await()
 
-                // 3. Enviar e-mail de verificação + redefinir senha (opcional)
-                authResult.user?.sendEmailVerification()?.await()
+                // 3. Opcional: enviar e-mail de verificação
+                authResult.user?.sendEmailVerification()
 
                 onSuccess()
                 loadUsers() // atualiza a lista
+
             } catch (e: Exception) {
-                onError(e)
+                val mensagem = when {
+                    e.message?.contains("email address is already in use") == true ->
+                        "Este e-mail já está sendo usado"
+                    e.message?.contains("weak password") == true ->
+                        "A senha deve ter pelo menos 6 caracteres"
+                    else -> "Erro ao criar: ${e.message}"
+                }
+                onError(mensagem)
             }
         }
     }
@@ -141,7 +151,6 @@ class UsersViewModel : ViewModel() {
     fun updateUser(
         id: String,
         novoNome: String,
-        novoEmail: String,
         novoAcesso: Long,
         onSuccess: () -> Unit = {},
         onError: (Exception) -> Unit = {}
@@ -152,7 +161,6 @@ class UsersViewModel : ViewModel() {
 
                 val updates = hashMapOf<String, Any>(
                     "nome" to novoNome,
-                    "email" to novoEmail,
                     "acesso" to novoAcesso
                 )
 

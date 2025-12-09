@@ -1,6 +1,9 @@
+// ProfileViewModel.kt — VERSÃO CORRIGIDA E MELHORADA
+
 package com.example.tcc.viewmodels
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.tcc.database.model.User
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
@@ -8,9 +11,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 class ProfileViewModel : ViewModel() {
+
+    private val auth = FirebaseAuth.getInstance()
+    private val db = FirebaseFirestore.getInstance()
 
     private val _userProfile = MutableStateFlow<User?>(null)
     val userProfile: StateFlow<User?> = _userProfile.asStateFlow()
@@ -26,89 +33,77 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun loadUserProfile() {
-        val currentUser = FirebaseAuth.getInstance().currentUser ?: run {
+        val currentUser = auth.currentUser ?: run {
             _error.value = "Usuário não autenticado"
             return
         }
 
-        _isLoading.value = true
-        _error.value = null
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                val snapshot = db.collection("usuarios")
+                    .whereEqualTo("email", currentUser.email)
+                    .limit(1)
+                    .get()
+                    .await()
 
-        FirebaseFirestore.getInstance()
-            .collection("usuarios")
-            .whereEqualTo("email", currentUser.email)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { docs ->
-                _isLoading.value = false
-                if (docs.isEmpty) {
+                if (snapshot.isEmpty) {
                     _error.value = "Perfil não encontrado"
                 } else {
-                    _userProfile.value = docs.first().toObject(User::class.java)
+                    _userProfile.value = snapshot.documents[0].toObject(User::class.java)
                 }
-            }
-            .addOnFailureListener {
+            } catch (e: Exception) {
+                _error.value = "Erro: ${e.message}"
+            } finally {
                 _isLoading.value = false
-                _error.value = "Erro ao carregar: ${it.message}"
             }
+        }
     }
 
     fun updateName(newName: String, onComplete: () -> Unit) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-        val db = FirebaseFirestore.getInstance()
+        val user = auth.currentUser ?: return
+        viewModelScope.launch {
+            try {
+                val doc = db.collection("usuarios")
+                    .whereEqualTo("email", user.email)
+                    .get()
+                    .await()
+                    .documents.firstOrNull()
 
-        db.collection("usuarios")
-            .whereEqualTo("email", user.email)
-            .get()
-            .addOnSuccessListener { docs ->
-                if (!docs.isEmpty) {
-                    docs.first().reference.update("nome", newName)
-                        .addOnSuccessListener {
-                            loadUserProfile()
-                            onComplete()
-                        }
-                }
+                doc?.reference?.update("nome", newName)?.await()
+                loadUserProfile()
+                onComplete()
+            } catch (e: Exception) {
+                _error.value = "Erro ao salvar nome"
             }
+        }
     }
 
-    fun updateEmailWithPassword(newEmail: String, currentPassword: String, onComplete: (Boolean) -> Unit) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
 
-        val credential = EmailAuthProvider.getCredential(user.email!!, currentPassword)
-        user.reauthenticate(credential)
-            .addOnSuccessListener {
-                user.updateEmail(newEmail)
-                    .addOnSuccessListener {
-                        // Atualiza no Firestore também
-                        FirebaseFirestore.getInstance()
-                            .collection("usuarios")
-                            .whereEqualTo("email", user.email)
-                            .get()
-                            .addOnSuccessListener { docs ->
-                                if (!docs.isEmpty) {
-                                    docs.first().reference.update("email", newEmail)
-                                        .addOnSuccessListener {
-                                            loadUserProfile()
-                                            onComplete(true)
-                                        }
-                                }
-                            }
-                    }
-                    .addOnFailureListener { onComplete(false) }
+    fun updatePassword(
+        oldPassword: String,
+        newPassword: String,
+        onComplete: (Boolean, String?) -> Unit
+    ) {
+        val user = auth.currentUser ?: run { onComplete(false, "Usuário não logado"); return }
+
+        viewModelScope.launch {
+            try {
+                val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
+                user.reauthenticate(credential).await()
+
+                user.updatePassword(newPassword).await()
+
+                // AQUI ESTAVA FALTANDO: atualizar senha no Firestore (se você guarda)
+                // Se você NÃO guarda senha no Firestore (recomendado!), ignore essa parte
+                // Caso guarde (não recomendado), faça:
+                // doc.reference.update("senha", newPassword)
+
+                onComplete(true, null)
+            } catch (e: Exception) {
+                onComplete(false, "Senha atual incorreta")
             }
-            .addOnFailureListener { onComplete(false) }
-    }
-
-    fun updatePassword(oldPassword: String, newPassword: String, onComplete: (Boolean) -> Unit) {
-        val user = FirebaseAuth.getInstance().currentUser ?: return
-
-        val credential = EmailAuthProvider.getCredential(user.email!!, oldPassword)
-        user.reauthenticate(credential)
-            .addOnSuccessListener {
-                user.updatePassword(newPassword)
-                    .addOnSuccessListener { onComplete(true) }
-                    .addOnFailureListener { onComplete(false) }
-            }
-            .addOnFailureListener { onComplete(false) }
+        }
     }
 }

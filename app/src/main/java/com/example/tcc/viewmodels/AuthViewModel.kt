@@ -155,23 +155,6 @@ sealed class AuthState {
             }
         }
 
-        // ================================
-        // VERIFICAÇÃO DE E-MAIL
-        // ================================
-        fun checkEmailVerification() {
-            val user = auth.currentUser ?: return
-            viewModelScope.launch {
-                try {
-                    user.reload().await()
-                    if (user.isEmailVerified) {
-                        _authState.value = AuthState.EmailVerified
-                        stopVerificationWatcher()
-                    }
-                } catch (e: Exception) {
-                    // Silencioso: só tenta de novo depois
-                }
-            }
-        }
 
         private fun startEmailVerificationWatcher(user: FirebaseUser) {
             stopVerificationWatcher()

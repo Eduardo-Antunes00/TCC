@@ -24,6 +24,8 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.AuthState
+import android.content.Context
+import android.content.SharedPreferences
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
@@ -31,6 +33,7 @@ fun LoginScreen(
     authViewModel: AuthViewModel = viewModel()
 ) {
     LaunchedEffect(Unit) { authViewModel.resetAuthState() }
+
 
     var email by rememberSaveable { mutableStateOf("") }
     var senha by rememberSaveable { mutableStateOf("") }

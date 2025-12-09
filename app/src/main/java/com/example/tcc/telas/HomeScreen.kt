@@ -30,6 +30,7 @@ import com.example.tcc.database.model.Route
 import com.example.tcc.viewmodels.MapViewModel
 import com.example.tcc.viewmodels.pegarRotas
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
