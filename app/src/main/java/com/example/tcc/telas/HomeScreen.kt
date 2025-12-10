@@ -75,7 +75,7 @@ fun HomeScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Onbo",
+                        "Ombo",
                         style = MaterialTheme.typography.headlineSmall,
                         color = azulEscuro
                     )
@@ -149,7 +149,7 @@ fun HomeScreen(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            "Onbo",
+                            "Ombo",
                             color = Color.White,
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )

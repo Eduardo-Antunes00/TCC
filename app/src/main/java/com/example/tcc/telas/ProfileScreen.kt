@@ -115,6 +115,7 @@ fun ProfileScreen(
                     }
                 }
 
+                // Dentro do else -> userProfile != null
                 else -> {
                     val profile = userProfile!!
 
@@ -126,7 +127,15 @@ fun ProfileScreen(
                             shape = MaterialTheme.shapes.large
                         ) {
                             Column(modifier = Modifier.padding(20.dp)) {
-                                // NOME - editável
+                                // E-MAIL PRIMEIRO - SÓ EXIBIÇÃO (com reticências)
+                                ProfileItemRowNoEdit(
+                                    label = "E-mail",
+                                    value = profile.email.orEmpty()
+                                )
+
+                                HorizontalDivider(color = Color.LightGray.copy(0.3f))
+
+                                // NOME - editável (agora em segundo)
                                 ProfileItemRow(
                                     label = "Nome",
                                     value = profile.nome.orEmpty(),
@@ -135,14 +144,6 @@ fun ProfileScreen(
                                         nameError = null
                                         showEditName = true
                                     }
-                                )
-
-                                HorizontalDivider(color = Color.LightGray.copy(0.3f))
-
-                                // E-MAIL - SÓ EXIBIÇÃO (sem botão)
-                                ProfileItemRowNoEdit(
-                                    label = "E-mail",
-                                    value = profile.email.orEmpty()
                                 )
 
                                 HorizontalDivider(color = Color.LightGray.copy(0.3f))
@@ -242,12 +243,21 @@ fun ProfileScreen(
         @Composable
         private fun ProfileItemRowNoEdit(label: String, value: String) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(label, color = Color.Gray, fontSize = 14.sp)
-                    Text(value, color = Color.Black, fontWeight = FontWeight.Medium, fontSize = 17.sp)
+                    Text(
+                        text = value,
+                        color = Color.Black,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 17.sp,
+                        maxLines = 1,                    // Importante: limita a 1 linha
+                        overflow = TextOverflow.Ellipsis // Adiciona "..." se for longo
+                    )
                 }
             }
         }

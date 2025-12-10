@@ -1,5 +1,6 @@
 package com.example.tcc.telas
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,8 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.example.tcc.viewmodels.AuthViewModel
 import com.example.tcc.viewmodels.AuthState
-import kotlinx.coroutines.delay
-@OptIn(ExperimentalMaterial3Api::class)
+import kotlinx.coroutines.delay@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
     navController: NavController,
@@ -44,6 +44,8 @@ fun RegisterScreen(
     var isLoading by rememberSaveable { mutableStateOf(false) }
 
     val authState by authViewModel.authState.observeAsState(AuthState.Idle)
+
+    // Reset dos campos ao entrar na tela
     LaunchedEffect(fromAdmin) {
         nome = ""
         email = ""
@@ -51,9 +53,17 @@ fun RegisterScreen(
         confirmarSenha = ""
         mensagem = ""
         isLoading = false
-        authViewModel.resetAuthState() // importante!
+        authViewModel.resetAuthState()
     }
-    // Só redireciona quando o e-mail for VERIFICADO
+
+    // Bloqueia o botão de voltar do sistema quando for cadastro pelo admin
+    if (fromAdmin) {
+        BackHandler(enabled = true) {
+            // Não faz nada → impede voltar
+        }
+    }
+
+    // Controle de estado e redirecionamento
     LaunchedEffect(authState) {
         when (authState) {
             is AuthState.Loading -> {
@@ -63,8 +73,7 @@ fun RegisterScreen(
 
             is AuthState.Success -> {
                 isLoading = false
-                mensagem = "Cadastro realizado com sucesso!\n\nVerifique seu e-mail para ativar a conta."
-                // NÃO redireciona aqui!
+                mensagem = "Verifique seu e-mail para ativar a conta."
             }
 
             is AuthState.EmailVerified -> {
@@ -100,19 +109,16 @@ fun RegisterScreen(
                     Text(
                         text = if (fromAdmin) "Novo Usuário" else "Criar Conta",
                         color = Color.White,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
                     )
                 },
+                // Remove o botão de voltar quando for admin
                 navigationIcon = {
-                    IconButton(onClick = {
-                        if (fromAdmin) {
-                            navController.navigate("usersAdm") { popUpTo("usersAdm") }
-                        } else {
-                            navController.popBackStack()
+                    if (!fromAdmin) {
+                        IconButton(onClick = { navController.popBackStack() }) {
+                            Icon(Icons.Default.ArrowBack, "Voltar", tint = Color.White)
                         }
-                    }) {
-                        Icon(Icons.Default.ArrowBack, "Voltar", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = azulPrincipal)
@@ -185,29 +191,29 @@ fun RegisterScreen(
                         colors = textFieldColors()
                     )
 
-                    Spacer (Modifier.height(28.dp))
+                    Spacer(Modifier.height(28.dp))
 
-                            Button(
-                            onClick = {
-                                when {
-                                    nome.isBlank() || email.isBlank() || senha.isBlank() || confirmarSenha.isBlank() ->
-                                        mensagem = "Preencha todos os campos"
+                    Button(
+                        onClick = {
+                            when {
+                                nome.isBlank() || email.isBlank() || senha.isBlank() || confirmarSenha.isBlank() ->
+                                    mensagem = "Preencha todos os campos"
 
-                                    !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() ->
-                                        mensagem = "E-mail inválido"
+                                !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() ->
+                                    mensagem = "E-mail inválido"
 
-                                    senha.length < 6 ->
-                                        mensagem = "A senha deve ter pelo menos 6 caracteres"
+                                senha.length < 6 ->
+                                    mensagem = "A senha deve ter pelo menos 6 caracteres"
 
-                                    senha != confirmarSenha ->
-                                        mensagem = "As senhas não coincidem"
+                                senha != confirmarSenha ->
+                                    mensagem = "As senhas não coincidem"
 
-                                    else -> {
-                                        mensagem = ""
-                                        authViewModel.register(email, senha, nome)
-                                    }
+                                else -> {
+                                    mensagem = ""
+                                    authViewModel.register(email, senha, nome)
                                 }
-                            },
+                            }
+                        },
                         enabled = !isLoading,
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = azulPrincipal),
@@ -227,11 +233,12 @@ fun RegisterScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    if (!fromAdmin) {
+                    // Remove o link "Já tem conta?" quando for admin
+
                         TextButton(onClick = { navController.navigate("login") }) {
                             Text("Já tem conta? Faça login", color = azulPrincipal)
                         }
-                    }
+
 
                     // Mensagem de status
                     if (mensagem.isNotEmpty()) {
@@ -246,19 +253,7 @@ fun RegisterScreen(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
 
-                        // Se já cadastrou e está esperando verificação
-                        if (authState is AuthState.Success || authState is AuthState.EmailVerified) {
-                            Spacer(Modifier.height(20.dp))
-                            Button(
-                                onClick = {
-                                    authViewModel.checkEmailVerification()
-                                    mensagem = "Verificando e-mail..."
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = azulEscuro)
-                            ) {
-                                Text("Já verifiquei meu e-mail", color = Color.White)
-                            }
-                        }
+
                     }
                 }
             }
@@ -266,7 +261,7 @@ fun RegisterScreen(
     }
 }
 
-// Cores dos campos (Material3 atualizado 2025)
+// Função auxiliar de cores (mantida igual)
 @Composable
 private fun textFieldColors() = TextFieldDefaults.colors(
     focusedTextColor = Color.Black,

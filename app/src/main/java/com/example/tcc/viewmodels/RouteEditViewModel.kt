@@ -177,11 +177,19 @@ class RouteEditViewModel : ViewModel() {
     }
 
     fun adicionarPonto(point: GeoPoint) {
-        val novoId = if (_pontos.isEmpty()) 1 else _pontos.maxOf { it.id } + 1
-        if (_pontos.size >= 2 && _pontos.last().ponto == _pontos.first().ponto) {
-            _pontos.add(_pontos.size - 1, PontoComId(novoId, point))
-        } else {
-            _pontos.add(PontoComId(novoId, point))
+        when {
+            _pontos.isEmpty() -> {
+                _pontos.add(PontoComId(1, point))
+                _pontos.add(PontoComId(0, point)) // já fecha a rota desde o primeiro toque!
+            }
+            else -> {
+                val novoId = _pontos.maxOf { it.id } + 1
+                if (_pontos.size >= 2 && _pontos.last().ponto == _pontos.first().ponto) {
+                    _pontos.add(_pontos.size - 1, PontoComId(novoId, point))
+                } else {
+                    _pontos.add(PontoComId(novoId, point))
+                }
+            }
         }
         triggerUpdate()
     }

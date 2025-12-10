@@ -69,6 +69,33 @@ fun RouteScreen(
     val azulEscuro = Color(0xFF003366)
     val fundoMapa = Color(0xFFF5F9FF)
 
+    LaunchedEffect(paradaSelecionada) {
+        if (paradaSelecionada == null) return@LaunchedEffect
+
+        // Encontra a parada selecionada
+        val parada = paradas.find { it.id == paradaSelecionada } ?: return@LaunchedEffect
+
+        // Atualização imediata (primeira vez)
+        val tempoEstimado = routeViewModel.calcularTempoParaParada(
+            parada.ponto,
+            onibusList,
+            route?.pontos ?: emptyList()
+        )
+        selectedItem = "Parada ${parada.id}\nTempo estimado: $tempoEstimado"
+
+        // Depois, atualiza a cada 3 segundos enquanto estiver selecionada
+        while (true) {
+            delay(3000L) // 3 segundos
+
+            // Recalcula com os dados mais recentes (onibusList pode ter mudado no loop principal)
+            val novoTempo = routeViewModel.calcularTempoParaParada(
+                parada.ponto,
+                onibusList,
+                route?.pontos ?: emptyList()
+            )
+            selectedItem = "Parada ${parada.id}\nTempo estimado: $novoTempo"
+        }
+    }
     LaunchedEffect(routeId) {
         while (true) {
             isLoading = true
