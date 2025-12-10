@@ -279,20 +279,19 @@ class RouteViewModel : ViewModel() {
 
     // 1. CORRIGIDA: agora aceita ônibus que já passaram da parada
     fun calcularTempoParaParada(paradaPosition: GeoPoint, onibusList: List<OnibusInfo>, pontos: List<GeoPoint>): String {
-        if (onibusList.isEmpty() || pontos.size < 2) return "Indeterminado"
+        if (onibusList.isEmpty() || pontos.size < 2) return "Indisponível"
 
-        val distParada = calcularDistanciaAcumuladaDoOnibusAtual(paradaPosition, pontos, "parada_fixa") // ID fixo pra parada
+        val distParada = calcularDistanciaAcumuladaDoOnibusAtual(paradaPosition, pontos)
         val comprimentoTotal = calcularVertexCumDists(pontos).last()
 
         var menorTempo = Double.MAX_VALUE
-        var melhorTexto = "Indeterminado"
-        val temOnibusEmOperacao = onibusList.any { it.status == "Em operação" }
-        if (!temOnibusEmOperacao) return "Indeterminado"
-        onibusList.forEach { onibus ->
-            // Agora passa o documentId do ônibus
-            val distOnibus = calcularDistanciaAcumuladaDoOnibusAtual(onibus.position, pontos, onibus.documentId)
+        var melhorTexto = "Indisponível"
 
+        onibusList.forEach { onibus ->
+            val distOnibus = calcularDistanciaAcumuladaDoOnibusAtual(onibus.position, pontos)
             var diferenca = distParada - distOnibus
+
+            // Se o ônibus já passou da parada → próxima volta
             if (diferenca < -50) {
                 diferenca += comprimentoTotal
             }
@@ -300,7 +299,7 @@ class RouteViewModel : ViewModel() {
             val distanciaRestante = diferenca.coerceAtLeast(0.0)
 
             var velocidade = onibus.velocity
-            if (velocidade < 5.55) velocidade = 7.0
+            if (velocidade < 5.55) velocidade = 7.0 // 25 km/h mínimo
 
             val tempoMinutos = if (velocidade > 0) (distanciaRestante / velocidade) / 60.0 else Double.MAX_VALUE
 
@@ -323,44 +322,22 @@ class RouteViewModel : ViewModel() {
 
     fun calcularDistanciaAcumuladaDoOnibusAtual(
         busPosition: GeoPoint,
-        pontos: List<GeoPoint>,
-        busId: String  // Adicione o ID do ônibus para rastrear por veículo
+        pontos: List<GeoPoint>
     ): Double {
         if (pontos.size < 2) return 0.0
 
-        // Calcula o ponto projetado mais próximo (como antes)
         val projetado = pontoMaisProximoNaLinha(busPosition, pontos) ?: return 0.0
         val cumDists = calcularVertexCumDists(pontos)
 
-        var novaDistAcumulada = 0.0
-        var encontrado = false
-
+        var acumulado = 0.0
         for (i in 0 until pontos.size - 1) {
             val a = pontos[i]
             val b = pontos[i + 1]
             if (estaNoSegmento(projetado, a, b)) {
-                novaDistAcumulada = cumDists[i] + distanciaEntrePontos(a, projetado)
-                encontrado = true
-                break
+                return cumDists[i] + distanciaEntrePontos(a, projetado)
             }
+            acumulado += distanciaEntrePontos(a, b)
         }
-
-        if (!encontrado) {
-            novaDistAcumulada = cumDists.last() + distanciaEntrePontos(pontos.last(), projetado)
-        }
-
-        // === AQUI ESTÁ O VERIFICADOR SIMPLES E PODEROSO ===
-        val state = busStates.getOrPut(busId) { BusState() }
-
-        // Se a nova distância é MENOR que a anterior (andou "pra trás"), ignora e mantém a antiga
-        // Tolerância de 30 metros para evitar falsos positivos por ruído de GPS
-        if (novaDistAcumulada < state.lastCumDist - 30.0) {
-            // Ignora essa atualização "suspeita" — mantém a distância antiga
-            return state.lastCumDist
-        }
-
-        // Se avançou (ou é a primeira vez), atualiza normalmente
-        state.lastCumDist = novaDistAcumulada
-        return novaDistAcumulada
+        return cumDists.last() + distanciaEntrePontos(pontos.last(), projetado)
     }
 }

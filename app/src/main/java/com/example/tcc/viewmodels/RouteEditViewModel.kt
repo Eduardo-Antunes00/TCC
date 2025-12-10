@@ -180,7 +180,7 @@ class RouteEditViewModel : ViewModel() {
         when {
             _pontos.isEmpty() -> {
                 _pontos.add(PontoComId(1, point))
-                _pontos.add(PontoComId(0, point)) // já fecha a rota desde o primeiro toque!
+                _pontos.add(PontoComId(2, point)) // já fecha a rota desde o primeiro toque!
             }
             else -> {
                 val novoId = _pontos.maxOf { it.id } + 1
@@ -191,9 +191,14 @@ class RouteEditViewModel : ViewModel() {
                 }
             }
         }
+        reordenarIdsPontos()
         triggerUpdate()
     }
-
+    private fun reordenarIdsPontos() {
+        _pontos.forEachIndexed { index, ponto ->
+            _pontos[index] = ponto.copy(id = index + 1)
+        }
+    }
     fun adicionarParada(point: GeoPoint) {
         val novoId = if (_paradas.isEmpty()) 1 else _paradas.maxOf { it.id } + 1
         val distancia = calcularDistanciaAcumulada(point)
@@ -257,7 +262,7 @@ class RouteEditViewModel : ViewModel() {
         _pontos.forEachIndexed { i, ponto ->
             _pontos[i] = ponto.copy(id = i + 1)
         }
-
+        reordenarIdsPontos()
         recalcularDistanciasParadas()
         triggerUpdate()
     }
