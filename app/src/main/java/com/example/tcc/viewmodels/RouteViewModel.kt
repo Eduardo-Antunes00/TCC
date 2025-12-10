@@ -283,7 +283,6 @@ class RouteViewModel : ViewModel() {
 
         val distParada = calcularDistanciaAcumuladaDoOnibusAtual(paradaPosition, pontos)
         val comprimentoTotal = calcularVertexCumDists(pontos).last()
-
         var menorTempo = Double.MAX_VALUE
         var melhorTexto = "Indisponível"
 
@@ -297,7 +296,6 @@ class RouteViewModel : ViewModel() {
             }
 
             val distanciaRestante = diferenca.coerceAtLeast(0.0)
-
             var velocidade = onibus.velocity
             if (velocidade < 5.55) velocidade = 7.0 // 25 km/h mínimo
 
@@ -316,7 +314,6 @@ class RouteViewModel : ViewModel() {
                 }
             }
         }
-
         return melhorTexto
     }
 

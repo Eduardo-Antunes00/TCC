@@ -150,10 +150,6 @@ class RouteEditViewModel : ViewModel() {
         return distanciaEntrePontos(p, projetado)
     }
 
-    // === ADIÇÃO E MOVIMENTAÇÃO ===
-    fun tentarAdicionarParada(pontoClicado: GeoPoint): GeoPoint? {
-        return if (distanciaPontoALinha(pontoClicado) <= 15.0) pontoClicado else null
-    }
 
     fun tentarMoverParada(index: Int, pontoClicado: GeoPoint): Boolean {
         if (distanciaPontoALinha(pontoClicado) <= 50.0) {
@@ -180,7 +176,7 @@ class RouteEditViewModel : ViewModel() {
         when {
             _pontos.isEmpty() -> {
                 _pontos.add(PontoComId(1, point))
-                _pontos.add(PontoComId(2, point)) // já fecha a rota desde o primeiro toque!
+                _pontos.add(PontoComId(2, point))
             }
             else -> {
                 val novoId = _pontos.maxOf { it.id } + 1
@@ -395,17 +391,5 @@ class RouteEditViewModel : ViewModel() {
                 isLoading.value = false
             }
         }
-    }
-
- fun bearingBetweenPoints(start: GeoPoint, end: GeoPoint): Double {
-        val lat1 = Math.toRadians(start.latitude)
-        val lat2 = Math.toRadians(end.latitude)
-        val dLon = Math.toRadians(end.longitude - start.longitude)
-
-        val y = sin(dLon) * cos(lat2)
-        val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
-        var bearing = Math.toDegrees(atan2(y, x))
-        bearing = (bearing + 360) % 360 // garante entre 0 e 360
-        return bearing
     }
 }
